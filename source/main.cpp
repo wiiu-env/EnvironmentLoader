@@ -16,6 +16,7 @@
 #include <memory>
 #include <malloc.h>
 #include <vpad/input.h>
+#include <coreinit/debug.h>
 #include "utils/StringTools.h"
 
 #include "fs/DirList.h"
@@ -101,7 +102,9 @@ int main(int argc, char **argv) {
         DEBUG_FUNCTION_LINE("Loaded module data");
         auto relocData = moduleData.value()->getRelocationDataList();
         if (!ElfUtils::doRelocation(relocData, gModuleData->trampolines, DYN_LINK_TRAMPOLIN_LIST_LENGTH)) {
-            DEBUG_FUNCTION_LINE("relocations failed\n");
+            OSFatal("Relocations failed");
+        } else {
+            DEBUG_FUNCTION_LINE("Relocation done");
         }
 
         DEBUG_FUNCTION_LINE("Calling entrypoint @%08X", moduleData.value()->getEntrypoint());
