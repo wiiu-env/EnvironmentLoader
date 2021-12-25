@@ -1,0 +1,17 @@
+name: CI-PR
+
+on: [pull_request]
+
+jobs:
+  build-binary:
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: build binary
+      run: |
+        docker build . -t builder
+        docker run --rm -v ${PWD}:/project builder make
+    - uses: actions/upload-artifact@master
+      with:
+       name: binary
+       path: "*.rpx"

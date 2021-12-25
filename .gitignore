@@ -1,0 +1,14 @@
+*.elf
+*.rpx
+build/
+*.cbp
+obj/
+relocator.h
+*.depend
+*.cscope_file_list
+*.layout
+.idea/
+cmake-build-debug/
+*.txt
+build1/
+cmake-build-default/
