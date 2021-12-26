@@ -116,15 +116,21 @@ bool ElfUtils::doRelocation(std::vector<std::shared_ptr<RelocationData>> &relocD
         std::string rplName = curReloc->getImportRPLInformation()->getName();
         int32_t isData = curReloc->getImportRPLInformation()->isData();
         OSDynLoad_Module rplHandle = nullptr;
-
-        if (OSDynLoad_IsModuleLoaded(rplName.c_str(), &rplHandle) != OS_DYNLOAD_OK) {
+        
+        
+        auto err = OSDynLoad_IsModuleLoaded(rplName.c_str(), &rplHandle);
+        if (err != OS_DYNLOAD_OK || rplHandle == 0) {
             // only acquire if not already loaded.
-            OSDynLoad_Acquire(rplName.c_str(), &rplHandle);
+            auto res = OSDynLoad_Acquire(rplName.c_str(), &rplHandle);
+            DEBUG_FUNCTION_LINE("OSDynLoad_Acquire %s: %d", rplName.c_str(), res);
+        } else {
+            DEBUG_FUNCTION_LINE("already acquired %08X", rplHandle);
         }
 
         uint32_t functionAddress = 0;
         OSDynLoad_FindExport(rplHandle, isData, functionName.c_str(), (void **) &functionAddress);
         if (functionAddress == 0) {
+            DEBUG_FUNCTION_LINE("Failed to find export for %s %s %d", functionName.c_str(), rplName.c_str(), isData);
             return false;
         }
         if (!ElfUtils::elfLinkOne(curReloc->getType(), curReloc->getOffset(), curReloc->getAddend(), (uint32_t) curReloc->getDestination(), functionAddress, tramp_data, tramp_length,
