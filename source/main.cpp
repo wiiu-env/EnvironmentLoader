@@ -25,8 +25,8 @@
 #include "kernel.h"
 #include "common/module_defines.h"
 
-#define MEMORY_REGION_START         0x00800000
-#define MEMORY_REGION_SIZE          0x00800000
+#define MEMORY_REGION_START         0x00900000
+#define MEMORY_REGION_SIZE          0x00700000
 #define MEMORY_REGION_END           (MEMORY_REGION_START + MEMORY_REGION_SIZE)
 
 #define gModuleData ((module_information_t *) (MEMORY_REGION_START))
