@@ -5,6 +5,7 @@
 #include <sysapp/launch.h>
 #include <coreinit/foreground.h>
 #include <coreinit/cache.h>
+#include <coreinit/ios.h>
 #include <nn/act/client_cpp.h>
 #include <coreinit/dynload.h>
 #include <whb/log_udp.h>
@@ -61,30 +62,49 @@ int main(int argc, char **argv) {
         WHBLogUdpInit();
     }
 
+    DEBUG_FUNCTION_LINE("Hello from EnvironmentLoader!");
+
+    char environmentPath[0x100];
+    memset(environmentPath, 0, sizeof(environmentPath));
+
+    auto handle = IOS_Open("/dev/mcp", IOS_OPEN_READ);
+    if (handle >= 0) {
+        int in = 0xF9; // IPC_CUSTOM_COPY_ENVIRONMENT_PATH
+        if (IOS_Ioctl(handle, 100, &in, sizeof(in), environmentPath, sizeof(environmentPath)) == IOS_ERROR_OK) {
+            DEBUG_FUNCTION_LINE("Boot into %s", environmentPath);
+        }
+
+        IOS_Close(handle);
+    }
+
     // 0x100 because before the .text section is a .init section
     // Currently the size of the .init is ~ 0x24 bytes. We substract 0x100 to be safe.
     uint32_t textSectionStart = textStart() - 0x1000;
 
-    DirList environmentDirs("fs:/vol/external01/wiiu/environments/", nullptr, DirList::Dirs, 1);
+    std::string environment_path = std::string(environmentPath);
+    if (strncmp(environmentPath, "fs:/vol/external01/wiiu/environments/", strlen("fs:/vol/external01/wiiu/environments/")) != 0) {
+        DirList environmentDirs("fs:/vol/external01/wiiu/environments/", nullptr, DirList::Dirs, 1);
 
-    std::map<std::string, std::string> environmentPaths;
-    for (int i = 0; i < environmentDirs.GetFilecount(); i++) {
-        environmentPaths[environmentDirs.GetFilename(i)] = environmentDirs.GetFilepath(i);
-    }
+        std::map<std::string, std::string> environmentPaths;
+        for (int i = 0; i < environmentDirs.GetFilecount(); i++) {
+            environmentPaths[environmentDirs.GetFilename(i)] = environmentDirs.GetFilepath(i);
+        }
 
-    VPADReadError err;
-    VPADStatus vpad_data;
-    VPADRead(VPAD_CHAN_0, &vpad_data, 1, &err);
+        VPADReadError err;
+        VPADStatus vpad_data;
+        VPADRead(VPAD_CHAN_0, &vpad_data, 1, &err);
 
-    uint32_t btn = 0;
-    if (err == VPAD_READ_SUCCESS) {
-        btn = vpad_data.hold | vpad_data.trigger;
-    }
+        uint32_t btn = 0;
+        if (err == VPAD_READ_SUCCESS) {
+            btn = vpad_data.hold | vpad_data.trigger;
+        }
 
-    std::string environment_path = "fs:/vol/external01/wiiu/environments/default";
-    if ((btn & VPAD_BUTTON_X) == VPAD_BUTTON_X) {
-        environment_path = EnvironmentSelectionScreen(environmentPaths);
-        DEBUG_FUNCTION_LINE("Selected %s", environment_path.c_str());
+        environment_path = "fs:/vol/external01/wiiu/environments/default";
+
+        if ((btn & VPAD_BUTTON_X) == VPAD_BUTTON_X) {
+            environment_path = EnvironmentSelectionScreen(environmentPaths);
+            DEBUG_FUNCTION_LINE("Selected %s", environment_path.c_str());
+        }
     }
 
     DirList setupModules(environment_path + "/modules/setup", ".rpx", DirList::Files, 1);
