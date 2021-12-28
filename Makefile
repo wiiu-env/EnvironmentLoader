@@ -38,6 +38,11 @@ CFLAGS	+=	$(INCLUDE) -D__WIIU__ -D__WUT__
 
 CXXFLAGS	:= $(CFLAGS) -std=c++20 
 
+ifeq ($(DEBUG),1)    
+CXXFLAGS += -DDEBUG -g
+CCFLAGS += -DDEBUG -g
+endif
+
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-g $(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map)
 

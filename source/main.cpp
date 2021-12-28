@@ -55,10 +55,12 @@ extern "C" uint32_t textStart();
 std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> &payloads);
 
 int main(int argc, char **argv) {
+#ifdef DEBUG
     if (!WHBLogModuleInit()) {
         WHBLogCafeInit();
         WHBLogUdpInit();
     }
+#endif // DEBUG
 
     DEBUG_FUNCTION_LINE("Hello from EnvironmentLoader!");
 
