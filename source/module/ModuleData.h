@@ -45,7 +45,25 @@ public:
         return entrypoint;
     }
 
+    void setStartAddress(uint32_t addr) {
+        this->startAddress = addr;
+    }
+
+    void setEndAddress(uint32_t _endAddress) {
+        this->endAddress = _endAddress;
+    }
+
+    [[nodiscard]] uint32_t getStartAddress() const {
+        return startAddress;
+    }
+
+    [[nodiscard]] uint32_t getEndAddress() const {
+        return endAddress;
+    }
+
 private:
     std::vector<std::shared_ptr<RelocationData>> relocation_data_list;
     uint32_t entrypoint = 0;
+    uint32_t startAddress = 0;
+    uint32_t endAddress = 0;
 };

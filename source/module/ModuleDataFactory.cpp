@@ -136,6 +136,8 @@ ModuleDataFactory::load(const std::string &path, uint32_t *destination_address_p
 
     free(destinations);
 
+    moduleData->setStartAddress(*destination_address_ptr);
+    moduleData->setEndAddress(endAddress);
     moduleData->setEntrypoint(entrypoint);
     DEBUG_FUNCTION_LINE("Saved entrypoint as %08X", entrypoint);
 

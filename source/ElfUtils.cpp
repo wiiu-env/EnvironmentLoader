@@ -122,9 +122,6 @@ bool ElfUtils::doRelocation(std::vector<std::shared_ptr<RelocationData>> &relocD
         if (err != OS_DYNLOAD_OK || rplHandle == 0) {
             // only acquire if not already loaded.
             auto res = OSDynLoad_Acquire(rplName.c_str(), &rplHandle);
-            DEBUG_FUNCTION_LINE("OSDynLoad_Acquire %s: %d", rplName.c_str(), res);
-        } else {
-            DEBUG_FUNCTION_LINE("already acquired %08X", rplHandle);
         }
 
         uint32_t functionAddress = 0;

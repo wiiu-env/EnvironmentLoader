@@ -77,8 +77,8 @@ int main(int argc, char **argv) {
     VPADRead(VPAD_CHAN_0, &vpad_data, 1, &err);
 
     uint32_t btn = 0;
-    if(err == VPAD_READ_SUCCESS) {
-         btn = vpad_data.hold | vpad_data.trigger;
+    if (err == VPAD_READ_SUCCESS) {
+        btn = vpad_data.hold | vpad_data.trigger;
     }
 
     std::string environment_path = "fs:/vol/external01/wiiu/environments/default";
@@ -109,6 +109,9 @@ int main(int argc, char **argv) {
         } else {
             DEBUG_FUNCTION_LINE("Relocation done");
         }
+
+        DCFlushRange((void *) moduleData.value()->getStartAddress(), moduleData.value()->getEndAddress() - moduleData.value()->getStartAddress());
+        ICInvalidateRange((void *) moduleData.value()->getStartAddress(), moduleData.value()->getEndAddress() - moduleData.value()->getStartAddress());
 
         DEBUG_FUNCTION_LINE("Calling entrypoint @%08X", moduleData.value()->getEntrypoint());
         char *arr[1];
