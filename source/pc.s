@@ -1,4 +1,4 @@
-.section ".text"
+.section ".crt0"
     .global textStart
 textStart:
     mflr 4;

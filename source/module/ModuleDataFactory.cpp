@@ -25,7 +25,7 @@
 using namespace ELFIO;
 
 std::optional<std::shared_ptr<ModuleData>>
-ModuleDataFactory::load(const std::string &path, uint32_t *destination_address_ptr, uint32_t maximum_size, relocation_trampolin_entry_t *trampolin_data, uint32_t trampolin_data_length) {
+ModuleDataFactory::load(const std::string &path, uint32_t destination_address_end, uint32_t maximum_size, relocation_trampolin_entry_t *trampolin_data, uint32_t trampolin_data_length) {
     elfio reader;
     std::shared_ptr<ModuleData> moduleData = std::make_shared<ModuleData>();
 
@@ -36,10 +36,26 @@ ModuleDataFactory::load(const std::string &path, uint32_t *destination_address_p
     }
 
     uint32_t sec_num = reader.sections.size();
-
     auto **destinations = (uint8_t **) malloc(sizeof(uint8_t *) * sec_num);
 
-    uint32_t baseOffset = *destination_address_ptr;
+    uint32_t sizeOfModule = 0;
+    for (uint32_t i = 0; i < sec_num; ++i) {
+        section *psec = reader.sections[i];
+        if (psec->get_type() == 0x80000002) {
+            continue;
+        }
+
+        if ((psec->get_type() == SHT_PROGBITS || psec->get_type() == SHT_NOBITS) && (psec->get_flags() & SHF_ALLOC)) {
+            sizeOfModule += psec->get_size() + 1;
+        }
+    }
+
+    if (sizeOfModule > maximum_size) {
+        DEBUG_FUNCTION_LINE("Module is too big.");
+        return {};
+    }
+
+    uint32_t baseOffset = (destination_address_end - sizeOfModule) & 0xFFFFFF00;
 
     uint32_t offset_text = baseOffset;
     uint32_t offset_data = offset_text;
@@ -131,17 +147,15 @@ ModuleDataFactory::load(const std::string &path, uint32_t *destination_address_p
         moduleData->addRelocationData(reloc);
     }
 
-    DCFlushRange((void *) *destination_address_ptr, totalSize);
-    ICInvalidateRange((void *) *destination_address_ptr, totalSize);
+    DCFlushRange((void *) baseOffset, totalSize);
+    ICInvalidateRange((void *) baseOffset, totalSize);
 
     free(destinations);
 
-    moduleData->setStartAddress(*destination_address_ptr);
+    moduleData->setStartAddress(baseOffset);
     moduleData->setEndAddress(endAddress);
     moduleData->setEntrypoint(entrypoint);
     DEBUG_FUNCTION_LINE("Saved entrypoint as %08X", entrypoint);
-
-    *destination_address_ptr = (*destination_address_ptr + totalSize + 0x100) & 0xFFFFFF00;
 
     return moduleData;
 }

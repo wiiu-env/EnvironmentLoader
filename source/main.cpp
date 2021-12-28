@@ -30,8 +30,6 @@
 #define MEMORY_REGION_SIZE          0x00700000
 #define MEMORY_REGION_END           (MEMORY_REGION_START + MEMORY_REGION_SIZE)
 
-#define gModuleData ((module_information_t *) (MEMORY_REGION_START))
-
 bool CheckRunning() {
     switch (ProcUIProcessMessages(true)) {
         case PROCUI_STATUS_EXITING: {
@@ -77,9 +75,10 @@ int main(int argc, char **argv) {
         IOS_Close(handle);
     }
 
-    // 0x100 because before the .text section is a .init section
-    // Currently the size of the .init is ~ 0x24 bytes. We substract 0x100 to be safe.
-    uint32_t textSectionStart = textStart() - 0x1000;
+    // We substract 0x100 to be safe.
+    uint32_t textSectionStart = textStart() - 0x100;
+
+    auto gModuleData = (module_information_t *) (textSectionStart - sizeof(module_information_t));
 
     std::string environment_path = std::string(environmentPath);
     if (strncmp(environmentPath, "fs:/vol/external01/wiiu/environments/", strlen("fs:/vol/external01/wiiu/environments/")) != 0) {
@@ -113,10 +112,10 @@ int main(int argc, char **argv) {
     RevertMainHook();
 
     for (int i = 0; i < setupModules.GetFilecount(); i++) {
-        uint32_t destination_address = ((uint32_t) gModuleData + (sizeof(module_information_t) + 0x0000FFFF)) & 0xFFFF0000;
+        uint32_t destination_address_end = ((uint32_t) gModuleData) & 0xFFFF0000;
         memset((void *) gModuleData, 0, sizeof(module_information_t));
-        DEBUG_FUNCTION_LINE("Trying to run %s", setupModules.GetFilepath(i));
-        auto moduleData = ModuleDataFactory::load(setupModules.GetFilepath(i), &destination_address, textSectionStart - destination_address, gModuleData->trampolines,
+        DEBUG_FUNCTION_LINE("Trying to run %s.", setupModules.GetFilepath(i), destination_address_end, ((uint32_t) gModuleData) - MEMORY_REGION_START);
+        auto moduleData = ModuleDataFactory::load(setupModules.GetFilepath(i), destination_address_end, ((uint32_t) gModuleData) - MEMORY_REGION_START, gModuleData->trampolines,
                                                   DYN_LINK_TRAMPOLIN_LIST_LENGTH);
         if (!moduleData) {
             DEBUG_FUNCTION_LINE("Failed to load %s", setupModules.GetFilepath(i));
