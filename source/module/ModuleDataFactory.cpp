@@ -56,6 +56,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
     }
 
     uint32_t baseOffset = (destination_address_end - sizeOfModule) & 0xFFFFFF00;
+    uint32_t startAddress = baseOffset;
 
     uint32_t offset_text = baseOffset;
     uint32_t offset_data = offset_text;
@@ -152,7 +153,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
 
     free(destinations);
 
-    moduleData->setStartAddress(baseOffset);
+    moduleData->setStartAddress(startAddress);
     moduleData->setEndAddress(endAddress);
     moduleData->setEntrypoint(entrypoint);
     DEBUG_FUNCTION_LINE("Saved entrypoint as %08X", entrypoint);
