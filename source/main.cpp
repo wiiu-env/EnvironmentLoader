@@ -32,7 +32,7 @@
 #define MEMORY_REGION_SIZE          0x00700000
 #define MEMORY_REGION_END           (MEMORY_REGION_START + MEMORY_REGION_SIZE)
 
-#define AUTOBOOT_CONFIG_PATH        "fs:/vol/external01/wiiu/environments/autoboot.cfg"
+#define AUTOBOOT_CONFIG_PATH        "fs:/vol/external01/wiiu/environments/default.cfg"
 
 bool CheckRunning() {
     switch (ProcUIProcessMessages(true)) {
@@ -298,6 +298,7 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
         }
     }
 
+    DrawUtils::beginDraw();
     DrawUtils::clear(COLOR_BLACK);
     DrawUtils::endDraw();
 
