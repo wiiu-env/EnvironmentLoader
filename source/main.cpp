@@ -115,7 +115,6 @@ int main(int argc, char **argv) {
     if (strncmp(environmentPath, "fs:/vol/external01/wiiu/environments/", strlen("fs:/vol/external01/wiiu/environments/")) != 0) {
         DirList environmentDirs("fs:/vol/external01/wiiu/environments/", nullptr, DirList::Dirs, 1);
 
-        bool foundFromConfig = false;
         bool forceMenu = true;
         auto res = getFileContent(AUTOBOOT_CONFIG_PATH);
         auto autobootIndex = -1;
@@ -126,7 +125,6 @@ int main(int argc, char **argv) {
                     DEBUG_FUNCTION_LINE("Found environment %s from config at index %d", res.value().c_str(), i);
                     autobootIndex = i;
                     environment_path = environmentDirs.GetFilepath(i);
-                    foundFromConfig = true;
                     forceMenu = false;
                     break;
                 }
@@ -216,7 +214,10 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
     uint32_t tvBufferSize = OSScreenGetBufferSizeEx(SCREEN_TV);
     uint32_t drcBufferSize = OSScreenGetBufferSizeEx(SCREEN_DRC);
 
-    uint8_t *screenBuffer = (uint8_t *) memalign(0x100, tvBufferSize + drcBufferSize);
+    auto *screenBuffer = (uint8_t *) memalign(0x100, tvBufferSize + drcBufferSize);
+    if (!screenBuffer) {
+        OSFatal("Fail to allocate screenBuffer");
+    }
 
     OSScreenSetBufferEx(SCREEN_TV, screenBuffer);
     OSScreenSetBufferEx(SCREEN_DRC, screenBuffer + tvBufferSize);
@@ -227,15 +228,13 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
     DrawUtils::initBuffers(screenBuffer, tvBufferSize, screenBuffer + tvBufferSize, drcBufferSize);
     DrawUtils::initFont();
 
-    uint32_t selected = 0;
+    uint32_t selected = autobootIndex > 0 ? autobootIndex : 0;
     int autoBoot = autobootIndex;
-
-    DEBUG_FUNCTION_LINE("Time to draw");
 
     bool redraw = true;
     while (true) {
         VPADStatus vpad{};
-        VPADRead(VPAD_CHAN_0, &vpad, 1, NULL);
+        VPADRead(VPAD_CHAN_0, &vpad, 1, nullptr);
 
         if (vpad.trigger & VPAD_BUTTON_UP) {
             if (selected > 0) {
