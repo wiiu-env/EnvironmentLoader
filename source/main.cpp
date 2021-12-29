@@ -18,6 +18,7 @@
 #include <malloc.h>
 #include <vpad/input.h>
 #include <coreinit/debug.h>
+#include <fcntl.h>
 #include "utils/StringTools.h"
 
 #include "fs/DirList.h"
@@ -25,10 +26,13 @@
 #include "ElfUtils.h"
 #include "kernel.h"
 #include "common/module_defines.h"
+#include "utils/DrawUtils.h"
 
 #define MEMORY_REGION_START         0x00900000
 #define MEMORY_REGION_SIZE          0x00700000
 #define MEMORY_REGION_END           (MEMORY_REGION_START + MEMORY_REGION_SIZE)
+
+#define AUTOBOOT_CONFIG_PATH        "fs:/vol/external01/wiiu/environments/autoboot.cfg"
 
 bool CheckRunning() {
     switch (ProcUIProcessMessages(true)) {
@@ -52,7 +56,32 @@ bool CheckRunning() {
 extern "C" uint32_t textStart();
 
 
-std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> &payloads);
+std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> &payloads, int32_t autobootIndex);
+
+std::optional<std::string> getFileContent(const std::string &path) {
+    DEBUG_FUNCTION_LINE("Read %s", path.c_str());
+    FILE *f = fopen(path.c_str(), "r");
+    if (f) {
+        char buf[128]{};
+        fgets(buf, sizeof(buf), f);
+        fclose(f);
+
+        return std::string(buf);
+    }
+    DEBUG_FUNCTION_LINE("Failed");
+    return {};
+}
+
+bool writeFileContent(const std::string &path, const std::string &content) {
+    DEBUG_FUNCTION_LINE("Write to file %s: %s", path.c_str(), content.c_str());
+    FILE *f = fopen(path.c_str(), "w");
+    if (f) {
+        fputs(content.c_str(), f);
+        fclose(f);
+        return true;
+    }
+    return false;
+}
 
 int main(int argc, char **argv) {
 #ifdef DEBUG
@@ -86,6 +115,26 @@ int main(int argc, char **argv) {
     if (strncmp(environmentPath, "fs:/vol/external01/wiiu/environments/", strlen("fs:/vol/external01/wiiu/environments/")) != 0) {
         DirList environmentDirs("fs:/vol/external01/wiiu/environments/", nullptr, DirList::Dirs, 1);
 
+        bool foundFromConfig = false;
+        bool forceMenu = true;
+        auto res = getFileContent(AUTOBOOT_CONFIG_PATH);
+        auto autobootIndex = -1;
+        if (res) {
+            DEBUG_FUNCTION_LINE("Got result %s", res->c_str());
+            for (int i = 0; i < environmentDirs.GetFilecount(); i++) {
+                if (environmentDirs.GetFilename(i) == res.value()) {
+                    DEBUG_FUNCTION_LINE("Found environment %s from config at index %d", res.value().c_str(), i);
+                    autobootIndex = i;
+                    environment_path = environmentDirs.GetFilepath(i);
+                    foundFromConfig = true;
+                    forceMenu = false;
+                    break;
+                }
+            }
+        } else {
+            DEBUG_FUNCTION_LINE("No config found");
+        }
+
         std::map<std::string, std::string> environmentPaths;
         for (int i = 0; i < environmentDirs.GetFilecount(); i++) {
             environmentPaths[environmentDirs.GetFilename(i)] = environmentDirs.GetFilepath(i);
@@ -100,10 +149,9 @@ int main(int argc, char **argv) {
             btn = vpad_data.hold | vpad_data.trigger;
         }
 
-        environment_path = "fs:/vol/external01/wiiu/environments/default";
-
-        if ((btn & VPAD_BUTTON_X) == VPAD_BUTTON_X) {
-            environment_path = EnvironmentSelectionScreen(environmentPaths);
+        if (forceMenu || (btn & VPAD_BUTTON_X) == VPAD_BUTTON_X) {
+            DEBUG_FUNCTION_LINE("Open menu!");
+            environment_path = EnvironmentSelectionScreen(environmentPaths, autobootIndex);
             DEBUG_FUNCTION_LINE("Selected %s", environment_path.c_str());
         }
     }
@@ -152,80 +200,131 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> &payloads) {
-    // Init screen and screen buffers
+#define COLOR_WHITE      Color(0xffffffff)
+#define COLOR_BLACK      Color(0, 0, 0, 255)
+#define COLOR_BACKGROUND Color(0, 40, 100, 255)
+#define COLOR_TEXT       COLOR_WHITE
+#define COLOR_TEXT2      Color(0xB3ffffff)
+#define COLOR_AUTOBOOT   Color(0xaeea00ff)
+#define COLOR_BORDER     Color(204, 204, 204, 255)
+#define COLOR_BORDER_HIGHLIGHTED Color(0x3478e4ff)
+
+
+std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> &payloads, int32_t autobootIndex) {
     OSScreenInit();
-    uint32_t screen_buf0_size = OSScreenGetBufferSizeEx(SCREEN_TV);
-    uint32_t screen_buf1_size = OSScreenGetBufferSizeEx(SCREEN_DRC);
-    auto *screenBuffer = (uint8_t *) memalign(0x100, screen_buf0_size + screen_buf1_size);
-    OSScreenSetBufferEx(SCREEN_TV, (void *) screenBuffer);
-    OSScreenSetBufferEx(SCREEN_DRC, (void *) (screenBuffer + screen_buf0_size));
 
-    OSScreenEnableEx(SCREEN_TV, 1);
-    OSScreenEnableEx(SCREEN_DRC, 1);
+    uint32_t tvBufferSize = OSScreenGetBufferSizeEx(SCREEN_TV);
+    uint32_t drcBufferSize = OSScreenGetBufferSizeEx(SCREEN_DRC);
 
-    // Clear screens
-    OSScreenClearBufferEx(SCREEN_TV, 0);
-    OSScreenClearBufferEx(SCREEN_DRC, 0);
+    uint8_t *screenBuffer = (uint8_t *) memalign(0x100, tvBufferSize + drcBufferSize);
 
-    OSScreenFlipBuffersEx(SCREEN_TV);
-    OSScreenFlipBuffersEx(SCREEN_DRC);
+    OSScreenSetBufferEx(SCREEN_TV, screenBuffer);
+    OSScreenSetBufferEx(SCREEN_DRC, screenBuffer + tvBufferSize);
 
-    VPADStatus vpad_data;
-    VPADReadError error;
-    int selected = 0;
-    std::string header = "Please choose your environment:";
+    OSScreenEnableEx(SCREEN_TV, TRUE);
+    OSScreenEnableEx(SCREEN_DRC, TRUE);
+
+    DrawUtils::initBuffers(screenBuffer, tvBufferSize, screenBuffer + tvBufferSize, drcBufferSize);
+    DrawUtils::initFont();
+
+    uint32_t selected = 0;
+    int autoBoot = autobootIndex;
+
+    DEBUG_FUNCTION_LINE("Time to draw");
+
+    bool redraw = true;
     while (true) {
-        // Clear screens
-        OSScreenClearBufferEx(SCREEN_TV, 0);
-        OSScreenClearBufferEx(SCREEN_DRC, 0);
+        VPADStatus vpad{};
+        VPADRead(VPAD_CHAN_0, &vpad, 1, NULL);
 
-        int pos = 0;
+        if (vpad.trigger & VPAD_BUTTON_UP) {
+            if (selected > 0) {
+                selected--;
+                redraw = true;
+            }
+        } else if (vpad.trigger & VPAD_BUTTON_DOWN) {
+            if (selected < payloads.size() - 1) {
+                selected++;
+                redraw = true;
+            }
+        } else if (vpad.trigger & VPAD_BUTTON_A) {
+            break;
+        } else if (vpad.trigger & VPAD_BUTTON_X) {
+            autoBoot = -1;
+            redraw = true;
+        } else if (vpad.trigger & VPAD_BUTTON_Y) {
+            autoBoot = selected;
+            redraw = true;
+        }
 
-        OSScreenPutFontEx(SCREEN_TV, 0, pos, header.c_str());
-        OSScreenPutFontEx(SCREEN_DRC, 0, pos, header.c_str());
+        if (redraw) {
+            DrawUtils::beginDraw();
+            DrawUtils::clear(COLOR_BACKGROUND);
 
-        pos += 2;
+            // draw buttons
+            uint32_t index = 8 + 24 + 8 + 4;
+            uint32_t i = 0;
+            for (auto const&[key, val]: payloads) {
+                if (i == selected) {
+                    DrawUtils::drawRect(16, index, SCREEN_WIDTH - 16 * 2, 44, 4, COLOR_BORDER_HIGHLIGHTED);
+                } else {
+                    DrawUtils::drawRect(16, index, SCREEN_WIDTH - 16 * 2, 44, 2, (i == autoBoot) ? COLOR_AUTOBOOT : COLOR_BORDER);
+                }
 
+                DrawUtils::setFontSize(24);
+                DrawUtils::setFontColor((i == autoBoot) ? COLOR_AUTOBOOT : COLOR_TEXT);
+                DrawUtils::print(16 * 2, index + 8 + 24, key.c_str());
+                index += 42 + 8;
+                i++;
+            }
+
+            DrawUtils::setFontColor(COLOR_TEXT);
+
+            // draw top bar
+            DrawUtils::setFontSize(24);
+            DrawUtils::print(16, 6 + 24, "Environment Loader");
+            DrawUtils::drawRectFilled(8, 8 + 24 + 4, SCREEN_WIDTH - 8 * 2, 3, COLOR_WHITE);
+
+            // draw bottom bar
+            DrawUtils::drawRectFilled(8, SCREEN_HEIGHT - 24 - 8 - 4, SCREEN_WIDTH - 8 * 2, 3, COLOR_WHITE);
+            DrawUtils::setFontSize(18);
+            DrawUtils::print(16, SCREEN_HEIGHT - 8, "\ue07d Navigate ");
+            DrawUtils::print(SCREEN_WIDTH - 16, SCREEN_HEIGHT - 8, "\ue000 Choose", true);
+            const char *autobootHints = "\ue002 Clear Default / \ue003 Select Default";
+            DrawUtils::print(SCREEN_WIDTH / 2 + DrawUtils::getTextWidth(autobootHints) / 2, SCREEN_HEIGHT - 8, autobootHints, true);
+
+            DrawUtils::endDraw();
+
+            redraw = false;
+        }
+    }
+
+    DrawUtils::clear(COLOR_BLACK);
+    DrawUtils::endDraw();
+
+    DrawUtils::deinitFont();
+
+    free(screenBuffer);
+
+    if (autoBoot != autobootIndex) {
         int i = 0;
         for (auto const&[key, val]: payloads) {
-            std::string text = StringTools::strfmt("%s %s", i == selected ? "> " : "  ", key.c_str());
-            OSScreenPutFontEx(SCREEN_TV, 0, pos, text.c_str());
-            OSScreenPutFontEx(SCREEN_DRC, 0, pos, text.c_str());
+            if (i == autoBoot) {
+                DEBUG_FUNCTION_LINE("Save config");
+                writeFileContent(AUTOBOOT_CONFIG_PATH, key);
+                break;
+            }
             i++;
-            pos++;
         }
-
-        VPADRead(VPAD_CHAN_0, &vpad_data, 1, &error);
-        if (vpad_data.trigger == VPAD_BUTTON_A) {
-            break;
-        }
-
-        if (vpad_data.trigger == VPAD_BUTTON_UP) {
-            selected--;
-            if (selected < 0) {
-                selected = 0;
-            }
-        } else if (vpad_data.trigger == VPAD_BUTTON_DOWN) {
-            selected++;
-            if ((uint32_t) selected >= payloads.size()) {
-                selected = payloads.size() - 1;
-            }
-        }
-
-        OSScreenFlipBuffersEx(SCREEN_TV);
-        OSScreenFlipBuffersEx(SCREEN_DRC);
-
-        OSSleepTicks(OSMillisecondsToTicks(16));
     }
+
     int i = 0;
     for (auto const&[key, val]: payloads) {
         if (i == selected) {
-            free(screenBuffer);
             return val;
         }
         i++;
     }
-    free(screenBuffer);
+
     return "";
 }
