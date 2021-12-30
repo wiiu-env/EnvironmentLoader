@@ -1,23 +1,22 @@
-# Setup payload
+# Environment Loader
 This is a payload that should be run with [CustomRPXLoader](https://github.com/wiiu-env/CustomRPXLoader).
 
 ## Usage
 Put the `payload.rpx` in the `sd:/wiiu/` folder of your sd card and use the `CustomRPXLoader` to run this setup payload.
 
 This payload checks for enviroments in the following directory: `sd:/wiiu/environments/`. 
-Per default it's booting `sd:/wiiu/environments/default`, to choose which environment will be booted, hold **X** on the gamepad while launching.
+
+Example file structure for having a `tiramisu` and a `installer` environment on the sd card:
+```
+sd:\wiiu\environments\tiramisu\modules\setup\00_mocha.rpx
+sd:\wiiu\environments\tiramisu\modules\setup\01_other_cool_payload.rpx
+sd:\wiiu\environments\installer\modules\setup\00_mocha.rpx
+sd:\wiiu\environments\installer\modules\setup\01_installer_launcher.rpx
+```
 
 When launching an given enviroment, all `.rpx` files in `[ENVIRONMENT]/modules/setup` will be run.
 - Make sure not to call `exit` in the setup payloads
-- The one time setups will be run in the order of their ordered filenames.
-
-Example file structure for having a `default` and a `installer` environment on the sd card:
-```
-sd:\wiiu\environments\default\modules\setup\00_mocha.rpx
-sd:\wiiu\environments\default\modules\setup\01_other_cool_payload.rpx
-sd:\wiiu\environments\installer\modules\setup\00_mocha.rpx
-sd:\wiiu\environments\installer\modules\setup\01_installer_auncher.rpx
-```
+- The files will be run in the order of their ordered filenames.
 
 ## Building
 Make you to have [wut](https://github.com/devkitPro/wut/) installed and use the following command for build:
