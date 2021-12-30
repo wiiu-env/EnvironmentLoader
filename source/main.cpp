@@ -305,6 +305,8 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
 
     DrawUtils::deinitFont();
 
+    OSScreenShutdown();
+
     free(screenBuffer);
 
     if (autoBoot != autobootIndex) {
