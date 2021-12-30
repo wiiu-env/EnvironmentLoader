@@ -28,8 +28,8 @@
 #include "common/module_defines.h"
 #include "utils/DrawUtils.h"
 
-#define MEMORY_REGION_START         0x00900000
-#define MEMORY_REGION_SIZE          0x00700000
+#define MEMORY_REGION_START         0x00A00000
+#define MEMORY_REGION_SIZE          0x00600000
 #define MEMORY_REGION_END           (MEMORY_REGION_START + MEMORY_REGION_SIZE)
 
 #define AUTOBOOT_CONFIG_PATH        "fs:/vol/external01/wiiu/environments/default.cfg"
@@ -195,6 +195,7 @@ int main(int argc, char **argv) {
     }
     ProcUIShutdown();
 
+    _Exit(0);
     return 0;
 }
 
