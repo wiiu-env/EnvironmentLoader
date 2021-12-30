@@ -3,6 +3,7 @@
 #include <elfio/elfio.hpp>
 #include <proc_ui/procui.h>
 #include <sysapp/launch.h>
+#include <sysapp/title.h>
 #include <coreinit/foreground.h>
 #include <coreinit/cache.h>
 #include <coreinit/ios.h>
@@ -13,6 +14,7 @@
 #include <whb/log_module.h>
 #include <vector>
 #include <coreinit/dynload.h>
+#include <coreinit/title.h>
 #include <coreinit/screen.h>
 #include <memory>
 #include <malloc.h>
@@ -111,6 +113,8 @@ int main(int argc, char **argv) {
 
     auto gModuleData = (module_information_t *) (textSectionStart - sizeof(module_information_t));
 
+    bool noEnvironmentsFound = false;
+
     std::string environment_path = std::string(environmentPath);
     if (strncmp(environmentPath, "fs:/vol/external01/wiiu/environments/", strlen("fs:/vol/external01/wiiu/environments/")) != 0) {
         DirList environmentDirs("fs:/vol/external01/wiiu/environments/", nullptr, DirList::Dirs, 1);
@@ -150,41 +154,61 @@ int main(int argc, char **argv) {
         if (forceMenu || (btn & VPAD_BUTTON_X) == VPAD_BUTTON_X) {
             DEBUG_FUNCTION_LINE("Open menu!");
             environment_path = EnvironmentSelectionScreen(environmentPaths, autobootIndex);
-            DEBUG_FUNCTION_LINE("Selected %s", environment_path.c_str());
+            if (environmentPaths.empty()) {
+                noEnvironmentsFound = true;
+            } else {
+                DEBUG_FUNCTION_LINE("Selected %s", environment_path.c_str());
+            }
         }
     }
-
-    DirList setupModules(environment_path + "/modules/setup", ".rpx", DirList::Files, 1);
-    setupModules.SortList();
-
     RevertMainHook();
 
-    for (int i = 0; i < setupModules.GetFilecount(); i++) {
-        uint32_t destination_address_end = ((uint32_t) gModuleData) & 0xFFFF0000;
-        memset((void *) gModuleData, 0, sizeof(module_information_t));
-        DEBUG_FUNCTION_LINE("Trying to run %s.", setupModules.GetFilepath(i), destination_address_end, ((uint32_t) gModuleData) - MEMORY_REGION_START);
-        auto moduleData = ModuleDataFactory::load(setupModules.GetFilepath(i), destination_address_end, ((uint32_t) gModuleData) - MEMORY_REGION_START, gModuleData->trampolines,
-                                                  DYN_LINK_TRAMPOLIN_LIST_LENGTH);
-        if (!moduleData) {
-            DEBUG_FUNCTION_LINE("Failed to load %s", setupModules.GetFilepath(i));
-            continue;
-        }
-        DEBUG_FUNCTION_LINE("Loaded module data");
-        auto relocData = moduleData.value()->getRelocationDataList();
-        if (!ElfUtils::doRelocation(relocData, gModuleData->trampolines, DYN_LINK_TRAMPOLIN_LIST_LENGTH)) {
-            OSFatal("Relocations failed");
-        } else {
-            DEBUG_FUNCTION_LINE("Relocation done");
-        }
+    if (!noEnvironmentsFound) {
+        DirList setupModules(environment_path + "/modules/setup", ".rpx", DirList::Files, 1);
+        setupModules.SortList();
 
-        DCFlushRange((void *) moduleData.value()->getStartAddress(), moduleData.value()->getEndAddress() - moduleData.value()->getStartAddress());
-        ICInvalidateRange((void *) moduleData.value()->getStartAddress(), moduleData.value()->getEndAddress() - moduleData.value()->getStartAddress());
+        for (int i = 0; i < setupModules.GetFilecount(); i++) {
+            uint32_t destination_address_end = ((uint32_t) gModuleData) & 0xFFFF0000;
+            memset((void *) gModuleData, 0, sizeof(module_information_t));
+            DEBUG_FUNCTION_LINE("Trying to run %s.", setupModules.GetFilepath(i), destination_address_end, ((uint32_t) gModuleData) - MEMORY_REGION_START);
+            auto moduleData = ModuleDataFactory::load(setupModules.GetFilepath(i), destination_address_end, ((uint32_t) gModuleData) - MEMORY_REGION_START, gModuleData->trampolines,
+                                                      DYN_LINK_TRAMPOLIN_LIST_LENGTH);
+            if (!moduleData) {
+                DEBUG_FUNCTION_LINE("Failed to load %s", setupModules.GetFilepath(i));
+                continue;
+            }
+            DEBUG_FUNCTION_LINE("Loaded module data");
+            auto relocData = moduleData.value()->getRelocationDataList();
+            if (!ElfUtils::doRelocation(relocData, gModuleData->trampolines, DYN_LINK_TRAMPOLIN_LIST_LENGTH)) {
+                OSFatal("Relocations failed");
+            } else {
+                DEBUG_FUNCTION_LINE("Relocation done");
+            }
 
-        DEBUG_FUNCTION_LINE("Calling entrypoint @%08X", moduleData.value()->getEntrypoint());
-        char *arr[1];
-        arr[0] = (char *) environment_path.c_str();
-        ((int (*)(int, char **)) moduleData.value()->getEntrypoint())(1, arr);
-        DEBUG_FUNCTION_LINE("Back from module");
+            DCFlushRange((void *) moduleData.value()->getStartAddress(), moduleData.value()->getEndAddress() - moduleData.value()->getStartAddress());
+            ICInvalidateRange((void *) moduleData.value()->getStartAddress(), moduleData.value()->getEndAddress() - moduleData.value()->getStartAddress());
+
+            DEBUG_FUNCTION_LINE("Calling entrypoint @%08X", moduleData.value()->getEntrypoint());
+            char *arr[1];
+            arr[0] = (char *) environment_path.c_str();
+            ((int (*)(int, char **)) moduleData.value()->getEntrypoint())(1, arr);
+            DEBUG_FUNCTION_LINE("Back from module");
+        }
+    } else {
+        DEBUG_FUNCTION_LINE("Return to Wii U Menu");
+        ProcUIInit(OSSavesDone_ReadyToRelease);
+        for (int i = 0; i < argc; i++) {
+            if(strcmp(argv[i], "void forceDefaultTitleIDToWiiUMenu(void)") == 0){
+                if((i + 1) < argc){
+                    i++;
+                    DEBUG_FUNCTION_LINE("call forceDefaultTitleIDToWiiUMenu");
+                    auto forceDefaultTitleIDToWiiUMenu = (void (*)()) argv[i];
+                    forceDefaultTitleIDToWiiUMenu();
+                }
+            }
+        }
+        DEBUG_FUNCTION_LINE("Launch menu");
+        SYSLaunchMenu();
     }
 
     ProcUIInit(OSSavesDone_ReadyToRelease);
@@ -201,6 +225,7 @@ int main(int argc, char **argv) {
 
 #define COLOR_WHITE      Color(0xffffffff)
 #define COLOR_BLACK      Color(0, 0, 0, 255)
+#define COLOR_RED        Color(237, 28, 36, 255)
 #define COLOR_BACKGROUND Color(0, 40, 100, 255)
 #define COLOR_TEXT       COLOR_WHITE
 #define COLOR_TEXT2      Color(0xB3ffffff)
@@ -264,18 +289,25 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
             // draw buttons
             uint32_t index = 8 + 24 + 8 + 4;
             uint32_t i = 0;
-            for (auto const&[key, val]: payloads) {
-                if (i == selected) {
-                    DrawUtils::drawRect(16, index, SCREEN_WIDTH - 16 * 2, 44, 4, COLOR_BORDER_HIGHLIGHTED);
-                } else {
-                    DrawUtils::drawRect(16, index, SCREEN_WIDTH - 16 * 2, 44, 2, (i == autoBoot) ? COLOR_AUTOBOOT : COLOR_BORDER);
-                }
+            if (!payloads.empty()) {
+                for (auto const&[key, val]: payloads) {
+                    if (i == selected) {
+                        DrawUtils::drawRect(16, index, SCREEN_WIDTH - 16 * 2, 44, 4, COLOR_BORDER_HIGHLIGHTED);
+                    } else {
+                        DrawUtils::drawRect(16, index, SCREEN_WIDTH - 16 * 2, 44, 2, (i == autoBoot) ? COLOR_AUTOBOOT : COLOR_BORDER);
+                    }
 
+                    DrawUtils::setFontSize(24);
+                    DrawUtils::setFontColor((i == autoBoot) ? COLOR_AUTOBOOT : COLOR_TEXT);
+                    DrawUtils::print(16 * 2, index + 8 + 24, key.c_str());
+                    index += 42 + 8;
+                    i++;
+                }
+            } else {
                 DrawUtils::setFontSize(24);
-                DrawUtils::setFontColor((i == autoBoot) ? COLOR_AUTOBOOT : COLOR_TEXT);
-                DrawUtils::print(16 * 2, index + 8 + 24, key.c_str());
-                index += 42 + 8;
-                i++;
+                DrawUtils::setFontColor(COLOR_RED);
+                const char *noEnvironmentsWarning = "No valid environments found. Press \ue000 to launch the Wii U Menu";
+                DrawUtils::print(SCREEN_WIDTH / 2 + DrawUtils::getTextWidth(noEnvironmentsWarning) / 2, SCREEN_HEIGHT / 2, noEnvironmentsWarning, true);
             }
 
             DrawUtils::setFontColor(COLOR_TEXT);
@@ -305,7 +337,11 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
 
     DrawUtils::deinitFont();
 
-    OSScreenShutdown();
+    if (OSGetTitleID() == _SYSGetSystemApplicationTitleId(SYSTEM_APP_ID_MII_MAKER)) {
+        // When we're in the Mii Maker "OSScreenShutdown" will cause a black screen.
+    } else {
+        OSScreenShutdown();
+    }
 
     free(screenBuffer);
 
