@@ -320,10 +320,14 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
             // draw bottom bar
             DrawUtils::drawRectFilled(8, SCREEN_HEIGHT - 24 - 8 - 4, SCREEN_WIDTH - 8 * 2, 3, COLOR_WHITE);
             DrawUtils::setFontSize(18);
-            DrawUtils::print(16, SCREEN_HEIGHT - 8, "\ue07d Navigate ");
-            DrawUtils::print(SCREEN_WIDTH - 16, SCREEN_HEIGHT - 8, "\ue000 Choose", true);
-            const char *autobootHints = "\ue002 Clear Default / \ue003 Select Default";
-            DrawUtils::print(SCREEN_WIDTH / 2 + DrawUtils::getTextWidth(autobootHints) / 2, SCREEN_HEIGHT - 8, autobootHints, true);
+            if (!payloads.empty()) {
+                DrawUtils::print(16, SCREEN_HEIGHT - 8, "\ue07d Navigate ");
+                DrawUtils::print(SCREEN_WIDTH - 16, SCREEN_HEIGHT - 8, "\ue000 Choose", true);
+                const char *autobootHints = "\ue002 Clear Default / \ue003 Select Default";
+                DrawUtils::print(SCREEN_WIDTH / 2 + DrawUtils::getTextWidth(autobootHints) / 2, SCREEN_HEIGHT - 8, autobootHints, true);
+            } else {
+                DrawUtils::print(SCREEN_WIDTH - 20, SCREEN_HEIGHT - 8, "\ue000 Wii U Menu", true);
+            }
 
             DrawUtils::endDraw();
 
