@@ -198,8 +198,8 @@ int main(int argc, char **argv) {
         DEBUG_FUNCTION_LINE("Return to Wii U Menu");
         ProcUIInit(OSSavesDone_ReadyToRelease);
         for (int i = 0; i < argc; i++) {
-            if(strcmp(argv[i], "void forceDefaultTitleIDToWiiUMenu(void)") == 0){
-                if((i + 1) < argc){
+            if (strcmp(argv[i], "void forceDefaultTitleIDToWiiUMenu(void)") == 0) {
+                if ((i + 1) < argc) {
                     i++;
                     DEBUG_FUNCTION_LINE("call forceDefaultTitleIDToWiiUMenu");
                     auto forceDefaultTitleIDToWiiUMenu = (void (*)()) argv[i];
