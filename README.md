@@ -2,7 +2,7 @@
 This is a payload that should be run with [CustomRPXLoader](https://github.com/wiiu-env/CustomRPXLoader).
 
 ## Usage
-Put the `payload.rpx` in the `sd:/wiiu/` folder of your sd card and use the `CustomRPXLoader` to run this setup payload.
+Put the `payload.rpx` in the `sd:/wiiu/` folder of your sd card and use the `CustomRPXLoader` to run this setup payload, hold X on the Gamepad while loading to force open the menu.
 
 This payload checks for enviroments in the following directory: `sd:/wiiu/environments/`. 
 
@@ -13,6 +13,9 @@ sd:\wiiu\environments\tiramisu\modules\setup\01_other_cool_payload.rpx
 sd:\wiiu\environments\installer\modules\setup\00_mocha.rpx
 sd:\wiiu\environments\installer\modules\setup\01_installer_launcher.rpx
 ```
+
+When you start the EnvironmentLoader a selection menu appears. Use Y on the Gamepad to set a default enviroment.
+To open the selection menu when a default enviroment is set, hold X on the Gamepad while launching the EnvironmentLoader.
 
 When launching an given enviroment, all `.rpx` files in `[ENVIRONMENT]/modules/setup` will be run.
 - Make sure not to call `exit` in the setup payloads
@@ -42,6 +45,6 @@ docker run -it --rm -v ${PWD}:/project environmentloader-builder make clean
 
 ## Credits
 - maschell
-- Copy paste stuff from dimok
-- Copy pasted the solution for using wut header in .elf files from [RetroArch](https://github.com/libretro/RetroArch)
+- Copy pasted stuff from dimok
 - Copy pasted resolving the ElfRelocations from [decaf](https://github.com/decaf-emu/decaf-emu)
+- https://github.com/serge1/ELFIO
