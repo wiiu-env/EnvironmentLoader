@@ -1,5 +1,6 @@
 #include <cstring>
 
+#include <gx2/state.h>
 #include <elfio/elfio.hpp>
 #include <proc_ui/procui.h>
 #include <sysapp/launch.h>
@@ -95,7 +96,7 @@ int main(int argc, char **argv) {
 
     if (IOS_Open((char *) ("/dev/iosuhax"), static_cast<IOSOpenMode>(0)) >= 0) {
         auto checkTiramisuHBL = fopen("fs:/vol/external01/wiiu/environments/tiramisu/modules/setup/50_hbl_installer.rpx", "r");
-        if(checkTiramisuHBL != nullptr){
+        if (checkTiramisuHBL != nullptr) {
             fclose(checkTiramisuHBL);
             OSFatal("Don't run the EnvironmentLoader twice.\n\nIf you want to open the Homebrew Launcher, launch the Mii Maker\ninstead.");
         } else {
@@ -254,6 +255,7 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
     if (!screenBuffer) {
         OSFatal("Fail to allocate screenBuffer");
     }
+    memset(screenBuffer, 0, tvBufferSize + drcBufferSize);
 
     OSScreenSetBufferEx(SCREEN_TV, screenBuffer);
     OSScreenSetBufferEx(SCREEN_DRC, screenBuffer + tvBufferSize);
@@ -351,11 +353,8 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
 
     DrawUtils::deinitFont();
 
-    if (OSGetTitleID() == _SYSGetSystemApplicationTitleId(SYSTEM_APP_ID_MII_MAKER)) {
-        // When we're in the Mii Maker "OSScreenShutdown" will cause a black screen.
-    } else {
-        OSScreenShutdown();
-    }
+    // Call GX2Init to shut down OSScreen
+    GX2Init(nullptr);
 
     free(screenBuffer);
 
