@@ -93,6 +93,16 @@ int main(int argc, char **argv) {
     }
 #endif // DEBUG
 
+    if (IOS_Open((char *) ("/dev/iosuhax"), static_cast<IOSOpenMode>(0)) >= 0) {
+        auto checkTiramisuHBL = fopen("fs:/vol/external01/wiiu/environments/tiramisu/modules/setup/50_hbl_installer.rpx", "r");
+        if(checkTiramisuHBL != nullptr){
+            fclose(checkTiramisuHBL);
+            OSFatal("Don't run the EnvironmentLoader twice.\n\nIf you want to open the Homebrew Launcher, launch the Mii Maker\ninstead.");
+        } else {
+            OSFatal("Don't run the EnvironmentLoader twice.");
+        }
+    }
+
     DEBUG_FUNCTION_LINE("Hello from EnvironmentLoader!");
 
     char environmentPath[0x100];
