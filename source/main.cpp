@@ -359,14 +359,18 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
     free(screenBuffer);
 
     if (autoBoot != autobootIndex) {
-        int i = 0;
-        for (auto const&[key, val]: payloads) {
-            if (i == autoBoot) {
-                DEBUG_FUNCTION_LINE("Save config");
-                writeFileContent(AUTOBOOT_CONFIG_PATH, key);
-                break;
+        if (autoBoot == -1) {
+            writeFileContent(AUTOBOOT_CONFIG_PATH, "-1");
+        } else {
+            int i = 0;
+            for (auto const&[key, val]: payloads) {
+                if (i == autoBoot) {
+                    DEBUG_FUNCTION_LINE("Save config");
+                    writeFileContent(AUTOBOOT_CONFIG_PATH, key);
+                    break;
+                }
+                i++;
             }
-            i++;
         }
     }
 
