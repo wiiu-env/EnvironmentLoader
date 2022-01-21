@@ -86,11 +86,19 @@ bool writeFileContent(const std::string &path, const std::string &content) {
     return false;
 }
 
+extern "C" void __fini();
+
+#ifdef DEBUG
+bool module_log = false;
+bool udp_log = false;
+bool cafe_log = false;
+#endif // DEBUG
+
 int main(int argc, char **argv) {
 #ifdef DEBUG
-    if (!WHBLogModuleInit()) {
-        WHBLogCafeInit();
-        WHBLogUdpInit();
+    if (!(module_log = WHBLogModuleInit())) {
+        cafe_log = WHBLogCafeInit();
+        udp_log = WHBLogUdpInit();
     }
 #endif // DEBUG
 
@@ -230,7 +238,12 @@ int main(int argc, char **argv) {
     }
     ProcUIShutdown();
 
-    _Exit(0);
+#ifdef DEBUG
+    if (module_log) { WHBLogModuleDeinit(); }
+    if (udp_log) { WHBLogUdpDeinit(); }
+    if (cafe_log) { WHBLogCafeDeinit(); }
+#endif // DEBUG
+    __fini();
     return 0;
 }
 
