@@ -40,7 +40,7 @@ CXXFLAGS	:= $(CFLAGS) -std=c++20
 
 ifeq ($(DEBUG),1)    
 CXXFLAGS += -DDEBUG -g
-CCFLAGS += -DDEBUG -g
+CFLAGS += -DDEBUG -g
 endif
 
 ASFLAGS	:=	-g $(ARCH)
