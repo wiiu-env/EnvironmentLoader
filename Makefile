@@ -31,12 +31,12 @@ INCLUDES	:=	source
 #-------------------------------------------------------------------------------
 # options for code generation
 #-------------------------------------------------------------------------------
-CFLAGS	:=	-g -Wall -O2 -ffunction-sections -fno-exceptions -fno-rtti\
+CFLAGS	:=	-g -Wall -O2 -ffunction-sections \
 			$(MACHDEP)
 
 CFLAGS	+=	$(INCLUDE) -D__WIIU__ -D__WUT__
 
-CXXFLAGS	:= $(CFLAGS) -std=c++20 
+CXXFLAGS	:= $(CFLAGS) -std=c++20 -fno-exceptions -fno-rtti
 
 ifeq ($(DEBUG),1)    
 CXXFLAGS += -DDEBUG -g
