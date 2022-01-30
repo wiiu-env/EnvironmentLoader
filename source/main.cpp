@@ -88,19 +88,9 @@ bool writeFileContent(const std::string &path, const std::string &content) {
 
 extern "C" void __fini();
 
-#ifdef DEBUG
-bool module_log = false;
-bool udp_log = false;
-bool cafe_log = false;
-#endif // DEBUG
 
 int main(int argc, char **argv) {
-#ifdef DEBUG
-    if (!(module_log = WHBLogModuleInit())) {
-        cafe_log = WHBLogCafeInit();
-        udp_log = WHBLogUdpInit();
-    }
-#endif // DEBUG
+    initLogging();
 
     if (IOS_Open((char *) ("/dev/iosuhax"), static_cast<IOSOpenMode>(0)) >= 0) {
         auto checkTiramisuHBL = fopen("fs:/vol/external01/wiiu/environments/tiramisu/modules/setup/50_hbl_installer.rpx", "r");
@@ -238,11 +228,7 @@ int main(int argc, char **argv) {
     }
     ProcUIShutdown();
 
-#ifdef DEBUG
-    if (module_log) { WHBLogModuleDeinit(); }
-    if (udp_log) { WHBLogUdpDeinit(); }
-    if (cafe_log) { WHBLogCafeDeinit(); }
-#endif // DEBUG
+    deinitLogging();
     __fini();
     return 0;
 }
