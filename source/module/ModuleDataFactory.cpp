@@ -15,12 +15,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  ****************************************************************************/
 
-#include <string>
-#include <vector>
-#include <map>
-#include <coreinit/cache.h>
 #include "ModuleDataFactory.h"
 #include "ElfUtils.h"
+#include <coreinit/cache.h>
+#include <map>
+#include <string>
+#include <vector>
 
 using namespace ELFIO;
 
@@ -144,7 +144,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
     }
     auto relocationData = getImportRelocationData(reader, destinations);
 
-    for (auto const &reloc: relocationData) {
+    for (auto const &reloc : relocationData) {
         moduleData->addRelocationData(reloc);
     }
 

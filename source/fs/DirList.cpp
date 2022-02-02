@@ -24,14 +24,14 @@
  * DirList Class
  * for WiiXplorer 2010
  ***************************************************************************/
+#include <algorithm>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <string>
 #include <strings.h>
-#include <algorithm>
-#include <sys/stat.h>
 #include <sys/dirent.h>
+#include <sys/stat.h>
 
 #include <fs/DirList.h>
 #include <utils/StringTools.h>

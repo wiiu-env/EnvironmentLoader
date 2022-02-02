@@ -1,11 +1,11 @@
 #pragma once
 
+#include "common/relocation_defines.h"
+#include "module/RelocationData.h"
 #include <cstdint>
 #include <cstdio>
-#include "common/relocation_defines.h"
 #include <memory>
 #include <vector>
-#include "module/RelocationData.h"
 
 
 #ifdef __cplusplus
@@ -17,6 +17,7 @@ int32_t LoadFileToMem(const char *relativefilepath, char **fileOut, uint32_t *si
 uint32_t load_loader_elf_from_sd(unsigned char *baseAddress, const char *relativePath);
 uint32_t load_loader_elf(unsigned char *baseAddress, char *elf_data, uint32_t fileSize);
 
+// clang-format off
 #define R_PPC_NONE              0
 #define R_PPC_ADDR32            1
 #define R_PPC_ADDR16_LO         4
@@ -44,6 +45,7 @@ uint32_t load_loader_elf(unsigned char *baseAddress, char *elf_data, uint32_t fi
 #define PPC_LOW24               0x03FFFFFC
 #define PPC_LOW14               0x0020FFFC
 #define PPC_HALF16              0xFFFF
+// clang-format on
 
 #ifdef __cplusplus
 }

@@ -17,10 +17,10 @@
 
 #pragma once
 
-#include <string>
-#include <memory>
-#include <utility>
 #include "ImportRPLInformation.h"
+#include <memory>
+#include <string>
+#include <utility>
 
 class RelocationData {
 

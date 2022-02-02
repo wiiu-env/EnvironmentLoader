@@ -17,13 +17,14 @@
 
 #pragma once
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+// clang-format off
 #define DYN_LINK_FUNCTION_NAME_LENGTH           351
 #define DYN_LINK_IMPORT_NAME_LENGTH             50
 
@@ -31,6 +32,7 @@ extern "C" {
 #define DYN_LINK_IMPORT_LIST_LENGTH             50
 
 #define DYN_LINK_TRAMPOLIN_LIST_LENGTH          DYN_LINK_FUNCTION_LIST_LENGTH
+// clang-format on
 
 typedef struct _dyn_linking_function_t {
     char functionName[DYN_LINK_FUNCTION_NAME_LENGTH + 1];

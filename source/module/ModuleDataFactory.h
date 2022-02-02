@@ -17,12 +17,12 @@
 
 #pragma once
 
-#include <string>
-#include <vector>
-#include <map>
+#include "../common/relocation_defines.h"
 #include "ModuleData.h"
 #include "elfio/elfio.hpp"
-#include "../common/relocation_defines.h"
+#include <map>
+#include <string>
+#include <vector>
 
 class ModuleDataFactory {
 public:

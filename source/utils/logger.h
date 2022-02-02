@@ -1,7 +1,7 @@
 #pragma once
 
-#include <whb/log.h>
 #include <string.h>
+#include <whb/log.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,12 +14,14 @@ extern "C" {
 
 #define DEBUG_FUNCTION_LINE_VERBOSE(FMT, ARGS...) while (0)
 
-#define DEBUG_FUNCTION_LINE(FMT, ARGS...)do { \
-    WHBLogPrintf("[%23s]%30s@L%04d: " FMT "",__FILENAME__,__FUNCTION__, __LINE__, ## ARGS); \
+#define DEBUG_FUNCTION_LINE(FMT, ARGS...)                                                        \
+    do {                                                                                         \
+        WHBLogPrintf("[%23s]%30s@L%04d: " FMT "", __FILENAME__, __FUNCTION__, __LINE__, ##ARGS); \
     } while (0)
 
-#define DEBUG_FUNCTION_LINE_WRITE(FMT, ARGS...)do { \
-    WHBLogWritef("[%23s]%30s@L%04d: " FMT "",__FILENAME__,__FUNCTION__, __LINE__, ## ARGS); \
+#define DEBUG_FUNCTION_LINE_WRITE(FMT, ARGS...)                                                  \
+    do {                                                                                         \
+        WHBLogWritef("[%23s]%30s@L%04d: " FMT "", __FILENAME__, __FUNCTION__, __LINE__, ##ARGS); \
     } while (0)
 
 #else
@@ -39,4 +41,3 @@ void deinitLogging();
 #ifdef __cplusplus
 }
 #endif
-

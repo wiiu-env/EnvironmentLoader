@@ -1,9 +1,9 @@
 
-#include <stdarg.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <strings.h>
 #include <fs/CFile.hpp>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <strings.h>
 
 CFile::CFile() {
     iFd = -1;
@@ -35,16 +35,16 @@ int32_t CFile::open(const std::string &filepath, eOpenTypes mode) {
 
     switch (mode) {
         default:
-        case ReadOnly:   // file must exist
+        case ReadOnly:// file must exist
             openMode = O_RDONLY;
             break;
-        case WriteOnly: // file will be created / zerod
+        case WriteOnly:// file will be created / zerod
             openMode = O_TRUNC | O_CREAT | O_WRONLY;
             break;
-        case ReadWrite: // file must exist
+        case ReadWrite:// file must exist
             openMode = O_RDWR;
             break;
-        case Append: // append to file, file will be created if missing. write only
+        case Append:// append to file, file will be created if missing. write only
             openMode = O_CREAT | O_APPEND | O_WRONLY;
             break;
     }
@@ -171,5 +171,3 @@ int32_t CFile::fwrite(const char *format, ...) {
 
     return result;
 }
-
-
