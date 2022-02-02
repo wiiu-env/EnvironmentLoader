@@ -1,3 +1,5 @@
+[![CI-Release](https://github.com/wiiu-env/EnvironmentLoader/actions/workflows/ci.yml/badge.svg)](https://github.com/wiiu-env/EnvironmentLoader/actions/workflows/ci.yml)
+
 # Environment Loader
 This is a payload that should be run with [CustomRPXLoader](https://github.com/wiiu-env/CustomRPXLoader).
 
