@@ -1,10 +1,10 @@
 #ifndef CFILE_HPP_
 #define CFILE_HPP_
 
-#include <stdio.h>
-#include <string>
-#include <string.h>
 #include <fcntl.h>
+#include <stdio.h>
+#include <string.h>
+#include <string>
 #include <unistd.h>
 #include <wut_types.h>
 

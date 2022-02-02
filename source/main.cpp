@@ -1,41 +1,42 @@
 #include <cstring>
 
-#include <gx2/state.h>
+#include "utils/StringTools.h"
+#include <coreinit/cache.h>
+#include <coreinit/debug.h>
+#include <coreinit/dynload.h>
+#include <coreinit/foreground.h>
+#include <coreinit/ios.h>
+#include <coreinit/screen.h>
+#include <coreinit/title.h>
 #include <elfio/elfio.hpp>
+#include <fcntl.h>
+#include <gx2/state.h>
+#include <malloc.h>
+#include <memory>
+#include <nn/act/client_cpp.h>
 #include <proc_ui/procui.h>
 #include <sysapp/launch.h>
 #include <sysapp/title.h>
-#include <coreinit/foreground.h>
-#include <coreinit/cache.h>
-#include <coreinit/ios.h>
-#include <nn/act/client_cpp.h>
-#include <coreinit/dynload.h>
-#include <whb/log_udp.h>
+#include <vector>
+#include <vpad/input.h>
 #include <whb/log_cafe.h>
 #include <whb/log_module.h>
-#include <vector>
-#include <coreinit/dynload.h>
-#include <coreinit/title.h>
-#include <coreinit/screen.h>
-#include <memory>
-#include <malloc.h>
-#include <vpad/input.h>
-#include <coreinit/debug.h>
-#include <fcntl.h>
-#include "utils/StringTools.h"
+#include <whb/log_udp.h>
 
-#include "fs/DirList.h"
-#include "module/ModuleDataFactory.h"
 #include "ElfUtils.h"
-#include "kernel.h"
 #include "common/module_defines.h"
+#include "fs/DirList.h"
+#include "kernel.h"
+#include "module/ModuleDataFactory.h"
 #include "utils/DrawUtils.h"
 
+// clang-format off
 #define MEMORY_REGION_START         0x00A00000
 #define MEMORY_REGION_SIZE          0x00600000
 #define MEMORY_REGION_END           (MEMORY_REGION_START + MEMORY_REGION_SIZE)
 
 #define AUTOBOOT_CONFIG_PATH        "fs:/vol/external01/wiiu/environments/default.cfg"
+// clang-format on
 
 bool CheckRunning() {
     switch (ProcUIProcessMessages(true)) {
@@ -109,7 +110,7 @@ int main(int argc, char **argv) {
 
     auto handle = IOS_Open("/dev/mcp", IOS_OPEN_READ);
     if (handle >= 0) {
-        int in = 0xF9; // IPC_CUSTOM_COPY_ENVIRONMENT_PATH
+        int in = 0xF9;// IPC_CUSTOM_COPY_ENVIRONMENT_PATH
         if (IOS_Ioctl(handle, 100, &in, sizeof(in), environmentPath, sizeof(environmentPath)) == IOS_ERROR_OK) {
             DEBUG_FUNCTION_LINE("Boot into %s", environmentPath);
         }
@@ -200,7 +201,9 @@ int main(int argc, char **argv) {
             DEBUG_FUNCTION_LINE("Calling entrypoint @%08X", moduleData.value()->getEntrypoint());
             char *arr[1];
             arr[0] = (char *) environment_path.c_str();
-            ((int (*)(int, char **)) moduleData.value()->getEntrypoint())(1, arr);
+            // clang-format off
+            ((int(*)(int, char **)) moduleData.value()->getEntrypoint())(1, arr);
+            // clang-format on
             DEBUG_FUNCTION_LINE("Back from module");
         }
     } else {
@@ -211,7 +214,9 @@ int main(int argc, char **argv) {
                 if ((i + 1) < argc) {
                     i++;
                     DEBUG_FUNCTION_LINE("call forceDefaultTitleIDToWiiUMenu");
-                    auto forceDefaultTitleIDToWiiUMenu = (void (*)()) argv[i];
+                    // clang-format off
+                    auto forceDefaultTitleIDToWiiUMenu = (void(*)()) argv[i];
+                    // clang-format on
                     forceDefaultTitleIDToWiiUMenu();
                 }
             }
@@ -233,6 +238,7 @@ int main(int argc, char **argv) {
     return 0;
 }
 
+// clang-format off
 #define COLOR_WHITE      Color(0xffffffff)
 #define COLOR_BLACK      Color(0, 0, 0, 255)
 #define COLOR_RED        Color(237, 28, 36, 255)
@@ -242,7 +248,7 @@ int main(int argc, char **argv) {
 #define COLOR_AUTOBOOT   Color(0xaeea00ff)
 #define COLOR_BORDER     Color(204, 204, 204, 255)
 #define COLOR_BORDER_HIGHLIGHTED Color(0x3478e4ff)
-
+// clang-format on
 
 std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> &payloads, int32_t autobootIndex) {
     OSScreenInit();
@@ -301,7 +307,7 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
             uint32_t index = 8 + 24 + 8 + 4;
             uint32_t i = 0;
             if (!payloads.empty()) {
-                for (auto const&[key, val]: payloads) {
+                for (auto const &[key, val] : payloads) {
                     if (i == selected) {
                         DrawUtils::drawRect(16, index, SCREEN_WIDTH - 16 * 2, 44, 4, COLOR_BORDER_HIGHLIGHTED);
                     } else {
@@ -362,7 +368,7 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
             writeFileContent(AUTOBOOT_CONFIG_PATH, "-1");
         } else {
             int i = 0;
-            for (auto const&[key, val]: payloads) {
+            for (auto const &[key, val] : payloads) {
                 if (i == autoBoot) {
                     DEBUG_FUNCTION_LINE("Save config");
                     writeFileContent(AUTOBOOT_CONFIG_PATH, key);
@@ -374,7 +380,7 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
     }
 
     int i = 0;
-    for (auto const&[key, val]: payloads) {
+    for (auto const &[key, val] : payloads) {
         if (i == selected) {
             return val;
         }

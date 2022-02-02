@@ -17,10 +17,10 @@
 
 #pragma once
 
-#include <cstdint>
-#include <cstddef>
 #include "dynamic_linking_defines.h"
 #include "relocation_defines.h"
+#include <cstddef>
+#include <cstdint>
 
 #ifdef __cplusplus
 extern "C" {

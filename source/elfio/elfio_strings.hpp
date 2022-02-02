@@ -1,3 +1,4 @@
+// clang-format off
 /*
 Copyright (C) 2001-2015 by Serge Lamikhov-Center
 

@@ -17,11 +17,11 @@
 
 #pragma once
 
-#include <string>
-#include <vector>
+#include "RelocationData.h"
 #include <map>
 #include <set>
-#include "RelocationData.h"
+#include <string>
+#include <vector>
 
 class ModuleData {
 public:

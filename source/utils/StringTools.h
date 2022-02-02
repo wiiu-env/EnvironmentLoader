@@ -26,8 +26,8 @@
 #ifndef __STRING_TOOLS_H
 #define __STRING_TOOLS_H
 
-#include <vector>
 #include <string>
+#include <vector>
 #include <wut_types.h>
 
 class StringTools {
@@ -62,4 +62,3 @@ public:
 };
 
 #endif /* __STRING_TOOLS_H */
-

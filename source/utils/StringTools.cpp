@@ -23,17 +23,16 @@
  *
  * for WiiXplorer 2010
  ***************************************************************************/
-#include <vector>
-#include <string>
-#include <string.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
-#include <stdio.h>
-#include <wchar.h>
+#include <string.h>
+#include <string>
 #include <strings.h>
-#include <wut_types.h>
-#include <stdio.h>
 #include <utils/StringTools.h>
+#include <vector>
+#include <wchar.h>
+#include <wut_types.h>
 
 
 BOOL StringTools::EndsWith(const std::string &a, const std::string &b) {
@@ -249,7 +248,7 @@ char *StringTools::str_replace(char *orig, char *rep, char *with) {
     char *tmp;    // varies
     int len_rep;  // length of rep (the string to remove)
     int len_with; // length of with (the string to replace rep with)
-    int len_front; // distance between rep and end of last rep
+    int len_front;// distance between rep and end of last rep
     int count;    // number of replacements
 
     // sanity checks and initialization
@@ -257,7 +256,7 @@ char *StringTools::str_replace(char *orig, char *rep, char *with) {
         return NULL;
     len_rep = strlen(rep);
     if (len_rep == 0)
-        return NULL; // empty rep causes infinite loop during count
+        return NULL;// empty rep causes infinite loop during count
     if (!with)
         with = (char *) "";
     len_with = strlen(with);
@@ -283,7 +282,7 @@ char *StringTools::str_replace(char *orig, char *rep, char *with) {
         len_front = ins - orig;
         tmp = strncpy(tmp, orig, len_front) + len_front;
         tmp = strcpy(tmp, with) + len_with;
-        orig += len_front + len_rep; // move to next "end of rep"
+        orig += len_front + len_rep;// move to next "end of rep"
     }
     strcpy(tmp, orig);
     return result;
