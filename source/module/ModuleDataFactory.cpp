@@ -35,7 +35,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
         return std::nullopt;
     }
 
-    uint32_t sec_num = reader.sections.size();
+    uint32_t sec_num    = reader.sections.size();
     auto **destinations = (uint8_t **) malloc(sizeof(uint8_t *) * sec_num);
 
     uint32_t sizeOfModule = 0;
@@ -55,7 +55,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
         return {};
     }
 
-    uint32_t baseOffset = (destination_address_end - sizeOfModule) & 0xFFFFFF00;
+    uint32_t baseOffset   = (destination_address_end - sizeOfModule) & 0xFFFFFF00;
     uint32_t startAddress = baseOffset;
 
     uint32_t offset_text = baseOffset;
@@ -63,7 +63,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
 
     uint32_t entrypoint = offset_text + (uint32_t) reader.get_entry() - 0x02000000;
 
-    uint32_t totalSize = 0;
+    uint32_t totalSize  = 0;
     uint32_t endAddress = 0;
 
     for (uint32_t i = 0; i < sec_num; ++i) {

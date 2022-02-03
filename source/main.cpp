@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
 
     auto handle = IOS_Open("/dev/mcp", IOS_OPEN_READ);
     if (handle >= 0) {
-        int in = 0xF9;// IPC_CUSTOM_COPY_ENVIRONMENT_PATH
+        int in = 0xF9; // IPC_CUSTOM_COPY_ENVIRONMENT_PATH
         if (IOS_Ioctl(handle, 100, &in, sizeof(in), environmentPath, sizeof(environmentPath)) == IOS_ERROR_OK) {
             DEBUG_FUNCTION_LINE("Boot into %s", environmentPath);
         }
@@ -129,17 +129,17 @@ int main(int argc, char **argv) {
     if (strncmp(environmentPath, "fs:/vol/external01/wiiu/environments/", strlen("fs:/vol/external01/wiiu/environments/")) != 0) {
         DirList environmentDirs("fs:/vol/external01/wiiu/environments/", nullptr, DirList::Dirs, 1);
 
-        bool forceMenu = true;
-        auto res = getFileContent(AUTOBOOT_CONFIG_PATH);
+        bool forceMenu     = true;
+        auto res           = getFileContent(AUTOBOOT_CONFIG_PATH);
         auto autobootIndex = -1;
         if (res) {
             DEBUG_FUNCTION_LINE("Got result %s", res->c_str());
             for (int i = 0; i < environmentDirs.GetFilecount(); i++) {
                 if (environmentDirs.GetFilename(i) == res.value()) {
                     DEBUG_FUNCTION_LINE("Found environment %s from config at index %d", res.value().c_str(), i);
-                    autobootIndex = i;
+                    autobootIndex    = i;
                     environment_path = environmentDirs.GetFilepath(i);
-                    forceMenu = false;
+                    forceMenu        = false;
                     break;
                 }
             }
@@ -253,7 +253,7 @@ int main(int argc, char **argv) {
 std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> &payloads, int32_t autobootIndex) {
     OSScreenInit();
 
-    uint32_t tvBufferSize = OSScreenGetBufferSizeEx(SCREEN_TV);
+    uint32_t tvBufferSize  = OSScreenGetBufferSizeEx(SCREEN_TV);
     uint32_t drcBufferSize = OSScreenGetBufferSizeEx(SCREEN_DRC);
 
     auto *screenBuffer = (uint8_t *) memalign(0x100, tvBufferSize + drcBufferSize);
@@ -272,7 +272,7 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
     DrawUtils::initFont();
 
     uint32_t selected = autobootIndex > 0 ? autobootIndex : 0;
-    int autoBoot = autobootIndex;
+    int autoBoot      = autobootIndex;
 
     bool redraw = true;
     while (true) {
@@ -293,10 +293,10 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
             break;
         } else if (vpad.trigger & VPAD_BUTTON_X) {
             autoBoot = -1;
-            redraw = true;
+            redraw   = true;
         } else if (vpad.trigger & VPAD_BUTTON_Y) {
             autoBoot = selected;
-            redraw = true;
+            redraw   = true;
         }
 
         if (redraw) {
@@ -305,7 +305,7 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
 
             // draw buttons
             uint32_t index = 8 + 24 + 8 + 4;
-            uint32_t i = 0;
+            uint32_t i     = 0;
             if (!payloads.empty()) {
                 for (auto const &[key, val] : payloads) {
                     if (i == selected) {

@@ -63,7 +63,7 @@ public:
 
 private:
     std::vector<std::shared_ptr<RelocationData>> relocation_data_list;
-    uint32_t entrypoint = 0;
+    uint32_t entrypoint   = 0;
     uint32_t startAddress = 0;
-    uint32_t endAddress = 0;
+    uint32_t endAddress   = 0;
 };
