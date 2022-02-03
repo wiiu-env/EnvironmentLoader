@@ -9,8 +9,8 @@ extern "C" {
 
 #ifdef DEBUG
 
-#define __FILENAME_X__ (strrchr(__FILE__, '\\') ? strrchr(__FILE__, '\\') + 1 : __FILE__)
-#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILENAME_X__)
+#define __FILENAME_X__                            (strrchr(__FILE__, '\\') ? strrchr(__FILE__, '\\') + 1 : __FILE__)
+#define __FILENAME__                              (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILENAME_X__)
 
 #define DEBUG_FUNCTION_LINE_VERBOSE(FMT, ARGS...) while (0)
 
@@ -28,9 +28,9 @@ extern "C" {
 
 #define DEBUG_FUNCTION_LINE_VERBOSE(FMT, ARGS...) while (0)
 
-#define DEBUG_FUNCTION_LINE(FMT, ARGS...) while (0)
+#define DEBUG_FUNCTION_LINE(FMT, ARGS...)         while (0)
 
-#define DEBUG_FUNCTION_LINE_WRITE(FMT, ARGS...) while (0)
+#define DEBUG_FUNCTION_LINE_WRITE(FMT, ARGS...)   while (0)
 
 #endif
 

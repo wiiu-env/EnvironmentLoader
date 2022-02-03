@@ -2,7 +2,8 @@
 BasedOnStyle: LLVM
 AccessModifierOffset: -4
 AlignAfterOpenBracket: Align
-AlignConsecutiveAssignments: None
+AlignConsecutiveAssignments: Consecutive
+AlignConsecutiveMacros: AcrossEmptyLinesAndComments
 AlignOperands: Align
 AllowAllArgumentsOnNextLine: false
 AllowAllConstructorInitializersOnNextLine: false
@@ -56,7 +57,7 @@ SpaceBeforeInheritanceColon: true
 SpaceBeforeParens: ControlStatements
 SpaceBeforeRangeBasedForLoopColon: true
 SpaceInEmptyParentheses: false
-SpacesBeforeTrailingComments: 0
+SpacesBeforeTrailingComments: 1
 SpacesInAngles: false
 SpacesInCStyleCastParentheses: false
 SpacesInContainerLiterals: false

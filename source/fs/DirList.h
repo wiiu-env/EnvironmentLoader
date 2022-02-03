@@ -93,8 +93,8 @@ public:
 
     //! Enum for search/filter flags
     enum {
-        Files = 0x01,
-        Dirs = 0x02,
+        Files           = 0x01,
+        Dirs            = 0x02,
         CheckSubfolders = 0x08,
     };
 

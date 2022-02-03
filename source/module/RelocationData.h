@@ -26,11 +26,11 @@ class RelocationData {
 
 public:
     RelocationData(char type, size_t offset, int32_t addend, void *destination, std::string name, std::shared_ptr<ImportRPLInformation> rplInfo) : rplInfo(std::move(rplInfo)) {
-        this->type = type;
-        this->offset = offset;
-        this->addend = addend;
+        this->type        = type;
+        this->offset      = offset;
+        this->addend      = addend;
         this->destination = destination;
-        this->name = std::move(name);
+        this->name        = std::move(name);
     }
 
     ~RelocationData() = default;

@@ -46,8 +46,8 @@ typedef struct _dyn_linking_import_t {
 
 typedef struct _dyn_linking_relocation_entry_t {
     dyn_linking_function_t *functionEntry = nullptr;
-    dyn_linking_import_t *importEntry = nullptr;
-    void *destination = NULL;
+    dyn_linking_import_t *importEntry     = nullptr;
+    void *destination                     = NULL;
     char type{};
     size_t offset{};
     int32_t addend{};

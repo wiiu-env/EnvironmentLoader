@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // visible screen sizes
-#define SCREEN_WIDTH 854
+#define SCREEN_WIDTH  854
 #define SCREEN_HEIGHT 480
 
 union Color {
