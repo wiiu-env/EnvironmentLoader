@@ -12,11 +12,6 @@
 extern "C" {
 #endif
 
-
-int32_t LoadFileToMem(const char *relativefilepath, char **fileOut, uint32_t *sizeOut);
-uint32_t load_loader_elf_from_sd(unsigned char *baseAddress, const char *relativePath);
-uint32_t load_loader_elf(unsigned char *baseAddress, char *elf_data, uint32_t fileSize);
-
 // clang-format off
 #define R_PPC_NONE              0
 #define R_PPC_ADDR32            1
