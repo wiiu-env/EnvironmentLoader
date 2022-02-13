@@ -16,6 +16,7 @@
  ****************************************************************************/
 
 #include "ModuleDataFactory.h"
+#include "../utils/FileUtils.h"
 #include "ElfUtils.h"
 #include <coreinit/cache.h>
 #include <map>
@@ -29,10 +30,18 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
     elfio reader;
     std::shared_ptr<ModuleData> moduleData = std::make_shared<ModuleData>();
 
+    uint8_t *buffer = nullptr;
+    uint32_t fsize  = 0;
+    if (LoadFileToMem(path.c_str(), &buffer, &fsize) < 0) {
+        DEBUG_FUNCTION_LINE("Failed to load file");
+        return {};
+    }
+
     // Load ELF data
-    if (!reader.load(path)) {
+    if (!reader.load(reinterpret_cast<char *>(buffer), fsize)) {
         DEBUG_FUNCTION_LINE("Can't find or process %s", path.c_str());
-        return std::nullopt;
+        free(buffer);
+        return {};
     }
 
     uint32_t sec_num    = reader.sections.size();
@@ -52,6 +61,8 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
 
     if (sizeOfModule > maximum_size) {
         DEBUG_FUNCTION_LINE("Module is too big.");
+        free(destinations);
+        free(buffer);
         return {};
     }
 
@@ -78,6 +89,8 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
             totalSize += sectionSize;
             if (totalSize > maximum_size) {
                 DEBUG_FUNCTION_LINE("Couldn't load setup module because it's too big.");
+                free(destinations);
+                free(buffer);
                 return {};
             }
 
@@ -100,6 +113,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
             } else {
                 DEBUG_FUNCTION_LINE("Unhandled case");
                 free(destinations);
+                free(buffer);
                 return std::nullopt;
             }
 
@@ -138,6 +152,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
             if (!linkSection(reader, psec->get_index(), (uint32_t) destinations[psec->get_index()], offset_text, offset_data, trampolin_data, trampolin_data_length)) {
                 DEBUG_FUNCTION_LINE("elfLink failed");
                 free(destinations);
+                free(buffer);
                 return std::nullopt;
             }
         }
@@ -152,6 +167,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
     ICInvalidateRange((void *) baseOffset, totalSize);
 
     free(destinations);
+    free(buffer);
 
     moduleData->setStartAddress(startAddress);
     moduleData->setEndAddress(endAddress);
