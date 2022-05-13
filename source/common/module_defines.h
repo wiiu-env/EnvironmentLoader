@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 struct module_information_t {
-    relocation_trampolin_entry_t trampolines[DYN_LINK_TRAMPOLIN_LIST_LENGTH];
+    relocation_trampoline_entry_t trampolines[DYN_LINK_TRAMPOLIN_LIST_LENGTH];
 };
 
 #ifdef __cplusplus
