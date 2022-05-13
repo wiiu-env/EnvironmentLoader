@@ -128,10 +128,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
             }
 
             //nextAddress = ROUNDUP(destination + sectionSize, 0x100);
-            if (psec->get_name() == ".bss") {
-                DEBUG_FUNCTION_LINE("memset %s section. Location: %08X size: %08X", psec->get_name().c_str(), destination, sectionSize);
-                memset(reinterpret_cast<void *>(destination), 0, sectionSize);
-            } else if (psec->get_name() == ".sbss") {
+            if (psec->get_name() == ".bss" || psec->get_name() == ".sbss") {
                 DEBUG_FUNCTION_LINE("memset %s section. Location: %08X size: %08X", psec->get_name().c_str(), destination, sectionSize);
                 memset(reinterpret_cast<void *>(destination), 0, sectionSize);
             }
