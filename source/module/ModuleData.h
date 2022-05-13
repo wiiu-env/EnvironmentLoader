@@ -29,15 +29,15 @@ public:
 
     ~ModuleData() = default;
 
-    void setEntrypoint(uint32_t addr) {
-        this->entrypoint = addr;
+    void setEntrypoint(uint32_t address) {
+        this->entrypoint = address;
     }
 
-    void addRelocationData(const std::shared_ptr<RelocationData> &relocation_data) {
-        relocation_data_list.push_back(relocation_data);
+    void addRelocationData(std::unique_ptr<RelocationData> relocation_data) {
+        relocation_data_list.push_back(std::move(relocation_data));
     }
 
-    [[nodiscard]] const std::vector<std::shared_ptr<RelocationData>> &getRelocationDataList() const {
+    [[nodiscard]] const std::vector<std::unique_ptr<RelocationData>> &getRelocationDataList() const {
         return relocation_data_list;
     }
 
@@ -45,12 +45,12 @@ public:
         return entrypoint;
     }
 
-    void setStartAddress(uint32_t addr) {
-        this->startAddress = addr;
+    void setStartAddress(uint32_t address) {
+        this->startAddress = address;
     }
 
-    void setEndAddress(uint32_t _endAddress) {
-        this->endAddress = _endAddress;
+    void setEndAddress(uint32_t address) {
+        this->endAddress = address;
     }
 
     [[nodiscard]] uint32_t getStartAddress() const {
@@ -62,7 +62,7 @@ public:
     }
 
 private:
-    std::vector<std::shared_ptr<RelocationData>> relocation_data_list;
+    std::vector<std::unique_ptr<RelocationData>> relocation_data_list;
     uint32_t entrypoint   = 0;
     uint32_t startAddress = 0;
     uint32_t endAddress   = 0;

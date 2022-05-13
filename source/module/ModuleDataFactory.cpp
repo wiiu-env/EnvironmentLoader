@@ -18,17 +18,21 @@
 #include "ModuleDataFactory.h"
 #include "../utils/FileUtils.h"
 #include "ElfUtils.h"
+#include "utils/OnLeavingScope.h"
+#include "utils/utils.h"
 #include <coreinit/cache.h>
 #include <map>
 #include <string>
 #include <vector>
 
-using namespace ELFIO;
-
-std::optional<std::shared_ptr<ModuleData>>
+std::optional<std::unique_ptr<ModuleData>>
 ModuleDataFactory::load(const std::string &path, uint32_t destination_address_end, uint32_t maximum_size, relocation_trampoline_entry_t *trampoline_data, uint32_t trampoline_data_length) {
-    elfio reader;
-    std::shared_ptr<ModuleData> moduleData = std::make_shared<ModuleData>();
+    ELFIO::elfio reader;
+    auto moduleData = make_unique_nothrow<ModuleData>();
+    if (!moduleData) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to allocate ModuleData");
+        return {};
+    }
 
     uint8_t *buffer = nullptr;
     uint32_t fsize  = 0;
@@ -44,12 +48,19 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
         return {};
     }
 
-    uint32_t sec_num    = reader.sections.size();
-    auto **destinations = (uint8_t **) malloc(sizeof(uint8_t *) * sec_num);
+    auto cleanupBuffer = onLeavingScope([buffer]() { free(buffer); });
+
+    uint32_t sec_num = reader.sections.size();
+
+    auto destinations = make_unique_nothrow<uint8_t *[]>(sec_num);
+    if (!destinations) {
+        DEBUG_FUNCTION_LINE_ERR("Failed alloc memory for destinations array");
+        return {};
+    }
 
     uint32_t sizeOfModule = 0;
     for (uint32_t i = 0; i < sec_num; ++i) {
-        section *psec = reader.sections[i];
+        ELFIO::section *psec = reader.sections[i];
         if (psec->get_type() == 0x80000002) {
             continue;
         }
@@ -61,8 +72,6 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
 
     if (sizeOfModule > maximum_size) {
         DEBUG_FUNCTION_LINE_ERR("Module is too big.");
-        free(destinations);
-        free(buffer);
         return {};
     }
 
@@ -78,8 +87,8 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
     uint32_t endAddress = 0;
 
     for (uint32_t i = 0; i < sec_num; ++i) {
-        section *psec = reader.sections[i];
-        if (psec->get_type() == 0x80000002) {
+        ELFIO::section *psec = reader.sections[i];
+        if (psec->get_type() == 0x80000002 || psec->get_name() == ".wut_load_bounds") {
             continue;
         }
 
@@ -89,8 +98,6 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
             totalSize += sectionSize;
             if (totalSize > maximum_size) {
                 DEBUG_FUNCTION_LINE_ERR("Couldn't load setup module because it's too big.");
-                free(destinations);
-                free(buffer);
                 return {};
             }
 
@@ -108,16 +115,19 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
                 destination -= 0x10000000;
                 destinations[psec->get_index()] -= 0x10000000;
             } else if (address >= 0xC0000000) {
-                destination -= 0xC0000000;
-                destinations[psec->get_index()] -= 0xC0000000;
+                DEBUG_FUNCTION_LINE_ERR("Loading section from 0xC0000000 is NOT supported");
+                return std::nullopt;
             } else {
                 DEBUG_FUNCTION_LINE_ERR("Unhandled case");
-                free(destinations);
-                free(buffer);
                 return std::nullopt;
             }
 
             const char *p = reader.sections[i]->get_data();
+
+            if (destination + sectionSize > (uint32_t) destination_address_end) {
+                DEBUG_FUNCTION_LINE_ERR("Tried to overflow buffer. %08X > %08X", destination + sectionSize, destination_address_end);
+                OSFatal("EnvironmentLoader: Tried to overflow buffer");
+            }
 
             if (psec->get_type() == SHT_NOBITS) {
                 DEBUG_FUNCTION_LINE("memset section %s %08X to 0 (%d bytes)", psec->get_name().c_str(), destination, sectionSize);
@@ -143,28 +153,19 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
     }
 
     for (uint32_t i = 0; i < sec_num; ++i) {
-        section *psec = reader.sections[i];
+        ELFIO::section *psec = reader.sections[i];
         if ((psec->get_type() == SHT_PROGBITS || psec->get_type() == SHT_NOBITS) && (psec->get_flags() & SHF_ALLOC)) {
             DEBUG_FUNCTION_LINE("Linking (%d)... %s", i, psec->get_name().c_str());
             if (!linkSection(reader, psec->get_index(), (uint32_t) destinations[psec->get_index()], offset_text, offset_data, trampoline_data, trampoline_data_length)) {
                 DEBUG_FUNCTION_LINE_ERR("elfLink failed");
-                free(destinations);
-                free(buffer);
                 return std::nullopt;
             }
         }
     }
-    auto relocationData = getImportRelocationData(reader, destinations);
-
-    for (auto const &reloc : relocationData) {
-        moduleData->addRelocationData(reloc);
-    }
+    getImportRelocationData(moduleData, reader, destinations.get());
 
     DCFlushRange((void *) baseOffset, totalSize);
     ICInvalidateRange((void *) baseOffset, totalSize);
-
-    free(destinations);
-    free(buffer);
 
     moduleData->setStartAddress(startAddress);
     moduleData->setEndAddress(endAddress);
@@ -174,79 +175,91 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
     return moduleData;
 }
 
-std::vector<std::shared_ptr<RelocationData>> ModuleDataFactory::getImportRelocationData(elfio &reader, uint8_t **destinations) {
-    std::vector<std::shared_ptr<RelocationData>> result;
-    std::map<uint32_t, std::string> infoMap;
+bool ModuleDataFactory::getImportRelocationData(std::unique_ptr<ModuleData> &moduleData, ELFIO::elfio &reader, uint8_t **destinations) {
+    std::map<uint32_t, std::shared_ptr<ImportRPLInformation>> infoMap;
 
     uint32_t sec_num = reader.sections.size();
 
     for (uint32_t i = 0; i < sec_num; ++i) {
-        section *psec = reader.sections[i];
+        auto *psec = reader.sections[i];
         if (psec->get_type() == 0x80000002) {
-            infoMap[i] = psec->get_name();
+            auto info = make_shared_nothrow<ImportRPLInformation>(psec->get_name());
+            if (!info) {
+                DEBUG_FUNCTION_LINE_ERR("Failed too allocate ImportRPLInformation");
+                return false;
+            }
+            infoMap[i] = std::move(info);
         }
     }
 
     for (uint32_t i = 0; i < sec_num; ++i) {
-        section *psec = reader.sections[i];
+        ELFIO::section *psec = reader.sections[i];
         if (psec->get_type() == SHT_RELA || psec->get_type() == SHT_REL) {
-            DEBUG_FUNCTION_LINE_VERBOSE("Found relocation section %s", psec->get_name().c_str());
-            relocation_section_accessor rel(reader, psec);
+            ELFIO::relocation_section_accessor rel(reader, psec);
             for (uint32_t j = 0; j < (uint32_t) rel.get_entries_num(); ++j) {
-                Elf64_Addr offset;
-                Elf_Word type;
-                Elf_Sxword addend;
+                ELFIO::Elf64_Addr offset;
+                ELFIO::Elf_Word type;
+                ELFIO::Elf_Sxword addend;
                 std::string sym_name;
-                Elf64_Addr sym_value;
-                Elf_Half sym_section_index;
+                ELFIO::Elf64_Addr sym_value;
+                ELFIO::Elf_Half sym_section_index;
 
                 if (!rel.get_entry(j, offset, sym_value, sym_name, type, addend, sym_section_index)) {
                     DEBUG_FUNCTION_LINE_ERR("Failed to get relocation");
+                    OSFatal("Failed to get relocation");
                     break;
                 }
 
-                // uint32_t adjusted_sym_value = (uint32_t) sym_value;
-                if (infoMap.count(sym_section_index) == 0) {
+                auto adjusted_sym_value = (uint32_t) sym_value;
+                if (adjusted_sym_value < 0xC0000000) {
                     continue;
-                }
-                auto rplInfo = ImportRPLInformation::createImportRPLInformation(infoMap[sym_section_index]);
-                if (!rplInfo) {
-                    DEBUG_FUNCTION_LINE_ERR("Failed to create import information");
-                    break;
                 }
 
                 uint32_t section_index = psec->get_info();
+                if (!infoMap.contains(sym_section_index)) {
+                    DEBUG_FUNCTION_LINE_ERR("Relocation is referencing a unknown section. %d destination: %08X sym_name %s", section_index, destinations[section_index], sym_name.c_str());
+                    OSFatal("Relocation is referencing a unknown section.");
+                }
 
-                // When these relocations are performed, we don't need the 0xC0000000 offset anymore.
-                auto relocationData = std::make_shared<RelocationData>(type, offset - 0x02000000, addend, (void *) (destinations[section_index] + 0x02000000), sym_name, rplInfo.value());
-                //relocationData->printInformation();
-                result.push_back(relocationData);
+                auto relocationData = make_unique_nothrow<RelocationData>(type,
+                                                                          offset - 0x02000000,
+                                                                          addend,
+                                                                          (void *) (destinations[section_index] + 0x02000000),
+                                                                          sym_name,
+                                                                          infoMap[sym_section_index]);
+
+                if (!relocationData) {
+                    DEBUG_FUNCTION_LINE_ERR("Failed to alloc relocation data");
+                    return false;
+                }
+
+                moduleData->addRelocationData(std::move(relocationData));
             }
         }
     }
-    return result;
+    return true;
 }
 
-bool ModuleDataFactory::linkSection(elfio &reader, uint32_t section_index, uint32_t destination, uint32_t base_text, uint32_t base_data, relocation_trampoline_entry_t *trampoline_data,
+bool ModuleDataFactory::linkSection(ELFIO::elfio &reader, uint32_t section_index, uint32_t destination, uint32_t base_text, uint32_t base_data, relocation_trampoline_entry_t *trampoline_data,
                                     uint32_t trampoline_data_length) {
     uint32_t sec_num = reader.sections.size();
 
     for (uint32_t i = 0; i < sec_num; ++i) {
-        section *psec = reader.sections[i];
+        ELFIO::section *psec = reader.sections[i];
         if (psec->get_info() == section_index) {
             DEBUG_FUNCTION_LINE_VERBOSE("Found relocation section %s", psec->get_name().c_str());
-            relocation_section_accessor rel(reader, psec);
+            ELFIO::relocation_section_accessor rel(reader, psec);
             for (uint32_t j = 0; j < (uint32_t) rel.get_entries_num(); ++j) {
-                Elf64_Addr offset;
-                Elf_Word type;
-                Elf_Sxword addend;
+                ELFIO::Elf64_Addr offset;
+                ELFIO::Elf_Word type;
+                ELFIO::Elf_Sxword addend;
                 std::string sym_name;
-                Elf64_Addr sym_value;
-                Elf_Half sym_section_index;
+                ELFIO::Elf64_Addr sym_value;
+                ELFIO::Elf_Half sym_section_index;
 
                 if (!rel.get_entry(j, offset, sym_value, sym_name, type, addend, sym_section_index)) {
                     DEBUG_FUNCTION_LINE_ERR("Failed to get relocation");
-                    break;
+                    return false;
                 }
 
                 auto adjusted_sym_value = (uint32_t) sym_value;
@@ -272,13 +285,11 @@ bool ModuleDataFactory::linkSection(elfio &reader, uint32_t section_index, uint3
                     DEBUG_FUNCTION_LINE_ERR("NOT IMPLEMENTED: %04X", sym_section_index);
                     return false;
                 }
-
                 if (!ElfUtils::elfLinkOne(type, offset, addend, destination, adjusted_sym_value, trampoline_data, trampoline_data_length, RELOC_TYPE_FIXED)) {
                     DEBUG_FUNCTION_LINE_ERR("Link failed");
                     return false;
                 }
             }
-            DEBUG_FUNCTION_LINE_VERBOSE("done");
         }
     }
     return true;

@@ -8,16 +8,16 @@
 #include "ElfUtils.h"
 #include "elfio/elfio.hpp"
 
-bool ElfUtils::doRelocation(std::vector<std::shared_ptr<RelocationData>> &relocData, relocation_trampoline_entry_t *tramp_data, uint32_t tramp_length) {
+bool ElfUtils::doRelocation(const std::vector<std::unique_ptr<RelocationData>> &relocData, relocation_trampoline_entry_t *tramp_data, uint32_t tramp_length) {
     for (auto const &curReloc : relocData) {
         std::string functionName   = curReloc->getName();
-        std::string rplName        = curReloc->getImportRPLInformation()->getName();
+        std::string rplName        = curReloc->getImportRPLInformation()->getRPLName();
         int32_t isData             = curReloc->getImportRPLInformation()->isData();
         OSDynLoad_Module rplHandle = nullptr;
 
 
         auto err = OSDynLoad_IsModuleLoaded(rplName.c_str(), &rplHandle);
-        if (err != OS_DYNLOAD_OK || rplHandle == 0) {
+        if (err != OS_DYNLOAD_OK || rplHandle == nullptr) {
             // only acquire if not already loaded.
             OSDynLoad_Acquire(rplName.c_str(), &rplHandle);
         }
@@ -41,14 +41,14 @@ bool ElfUtils::doRelocation(std::vector<std::shared_ptr<RelocationData>> &relocD
 }
 
 // See https://github.com/decaf-emu/decaf-emu/blob/43366a34e7b55ab9d19b2444aeb0ccd46ac77dea/src/libdecaf/src/cafe/loader/cafe_loader_reloc.cpp#L144
-bool ElfUtils::elfLinkOne(char type, size_t offset, int32_t addend, uint32_t destination, uint32_t symbol_addr, relocation_trampoline_entry_t *trampolin_data, uint32_t trampolin_data_length,
+bool ElfUtils::elfLinkOne(char type, size_t offset, int32_t addend, uint32_t destination, uint32_t symbol_addr, relocation_trampoline_entry_t *trampoline_data, uint32_t trampoline_data_length,
                           RelocationType reloc_type) {
     if (type == R_PPC_NONE) {
         return true;
     }
+
     auto target = destination + offset;
     auto value  = symbol_addr + addend;
-
 
     auto relValue = value - static_cast<uint32_t>(target);
 
@@ -68,7 +68,7 @@ bool ElfUtils::elfLinkOne(char type, size_t offset, int32_t addend, uint32_t des
             *((uint16_t *) (target)) = static_cast<uint16_t>((value + 0x8000) >> 16);
             break;
         case R_PPC_DTPMOD32:
-            DEBUG_FUNCTION_LINE_ERR("################IMPLEMENT ME\n");
+            DEBUG_FUNCTION_LINE_ERR("################IMPLEMENT ME");
             //*((int32_t *)(target)) = tlsModuleIndex;
             break;
         case R_PPC_DTPREL32:
@@ -111,33 +111,40 @@ bool ElfUtils::elfLinkOne(char type, size_t offset, int32_t addend, uint32_t des
             // }
             auto distance = static_cast<int32_t>(value) - static_cast<int32_t>(target);
             if (distance > 0x1FFFFFC || distance < -0x1FFFFFC) {
-                if (trampolin_data == nullptr) {
-                    DEBUG_FUNCTION_LINE_ERR("***24-bit relative branch cannot hit target. Trampoline isn't provided\n");
-                    DEBUG_FUNCTION_LINE_ERR("***value %08X - target %08X = distance %08X\n", value, target, distance);
+                if (trampoline_data == nullptr) {
+                    DEBUG_FUNCTION_LINE_ERR("***24-bit relative branch cannot hit target. Trampoline isn't provided");
+                    DEBUG_FUNCTION_LINE_ERR("***value %08X - target %08X = distance %08X", value, target, distance);
                     return false;
                 } else {
                     relocation_trampoline_entry_t *freeSlot = nullptr;
-                    for (uint32_t i = 0; i < trampolin_data_length; i++) {
+                    for (uint32_t i = 0; i < trampoline_data_length; i++) {
                         // We want to override "old" relocations of imports
                         // Pending relocations have the status RELOC_TRAMP_IMPORT_IN_PROGRESS.
                         // When all relocations are done successfully, they will be turned into RELOC_TRAMP_IMPORT_DONE
                         // so they can be overridden/updated/reused on the next application launch.
                         //
                         // Relocations that won't change will have the status RELOC_TRAMP_FIXED and are set to free when the module is unloaded.
-                        if (trampolin_data[i].status == RELOC_TRAMP_FREE ||
-                            trampolin_data[i].status == RELOC_TRAMP_IMPORT_DONE) {
-                            freeSlot = &(trampolin_data[i]);
+                        if (trampoline_data[i].status == RELOC_TRAMP_FREE ||
+                            trampoline_data[i].status == RELOC_TRAMP_IMPORT_DONE) {
+                            freeSlot = &(trampoline_data[i]);
                             break;
                         }
                     }
                     if (freeSlot == nullptr) {
-                        DEBUG_FUNCTION_LINE_ERR("***24-bit relative branch cannot hit target. Trampoline data list is full\n");
-                        DEBUG_FUNCTION_LINE_ERR("***value %08X - target %08X = distance %08X\n", value, target, (target - (uint32_t) & (freeSlot->trampoline[0])));
+                        DEBUG_FUNCTION_LINE_ERR("***24-bit relative branch cannot hit target. Trampoline data list is full");
+                        DEBUG_FUNCTION_LINE_ERR("***value %08X - target %08X = distance %08X", value, target, target - (uint32_t) & (freeSlot->trampoline[0]));
                         return false;
                     }
-                    if (target - (uint32_t) & (freeSlot->trampoline[0]) > 0x1FFFFFC) {
+                    auto symbolValue = (uint32_t) & (freeSlot->trampoline[0]);
+                    auto newValue    = symbolValue + addend;
+                    auto newDistance = static_cast<int32_t>(newValue) - static_cast<int32_t>(target);
+                    if (newDistance > 0x1FFFFFC || newDistance < -0x1FFFFFC) {
                         DEBUG_FUNCTION_LINE_ERR("**Cannot link 24-bit jump (too far to tramp buffer).");
-                        DEBUG_FUNCTION_LINE_ERR("***value %08X - target %08X = distance %08X\n", value, target, (target - (uint32_t) & (freeSlot->trampoline[0])));
+                        if (newDistance < 0) {
+                            DEBUG_FUNCTION_LINE_ERR("***value %08X - target %08X = distance -%08X", newValue, target, abs(newDistance));
+                        } else {
+                            DEBUG_FUNCTION_LINE_ERR("***value %08X - target %08X = distance  %08X", newValue, target, newDistance);
+                        }
                         return false;
                     }
 
@@ -154,9 +161,7 @@ bool ElfUtils::elfLinkOne(char type, size_t offset, int32_t addend, uint32_t des
                         // Relocations for the imports may be overridden
                         freeSlot->status = RELOC_TRAMP_IMPORT_DONE;
                     }
-                    auto symbolValue = (uint32_t) & (freeSlot->trampoline[0]);
-                    value            = symbolValue + addend;
-                    distance         = static_cast<int32_t>(value) - static_cast<int32_t>(target);
+                    distance = newDistance;
                 }
             }
 
@@ -182,5 +187,7 @@ bool ElfUtils::elfLinkOne(char type, size_t offset, int32_t addend, uint32_t des
             DEBUG_FUNCTION_LINE_ERR("***ERROR: Unsupported Relocation_Add Type (%08X):", type);
             return false;
     }
+    ICInvalidateRange(reinterpret_cast<void *>(target), 4);
+    DCFlushRange(reinterpret_cast<void *>(target), 4);
     return true;
 }

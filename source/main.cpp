@@ -184,13 +184,13 @@ int main(int argc, char **argv) {
                                                       DYN_LINK_TRAMPOLIN_LIST_LENGTH);
             if (!moduleData) {
                 DEBUG_FUNCTION_LINE_ERR("Failed to load %s", setupModules.GetFilepath(i));
+                OSFatal("EnvironmentLoader: Failed to load module");
                 continue;
             }
             DEBUG_FUNCTION_LINE("Loaded module data");
-            auto relocData = moduleData.value()->getRelocationDataList();
-            if (!ElfUtils::doRelocation(relocData, gModuleData->trampolines, DYN_LINK_TRAMPOLIN_LIST_LENGTH)) {
+            if (!ElfUtils::doRelocation(moduleData.value()->getRelocationDataList(), gModuleData->trampolines, DYN_LINK_TRAMPOLIN_LIST_LENGTH)) {
                 DEBUG_FUNCTION_LINE_ERR("Relocations failed");
-                OSFatal("Relocations failed");
+                OSFatal("EnvironmentLoader: Relocations failed");
             } else {
                 DEBUG_FUNCTION_LINE("Relocation done");
             }
