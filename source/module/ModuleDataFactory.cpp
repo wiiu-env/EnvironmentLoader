@@ -33,13 +33,13 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
     uint8_t *buffer = nullptr;
     uint32_t fsize  = 0;
     if (LoadFileToMem(path.c_str(), &buffer, &fsize) < 0) {
-        DEBUG_FUNCTION_LINE("Failed to load file");
+        DEBUG_FUNCTION_LINE_ERR("Failed to load file");
         return {};
     }
 
     // Load ELF data
     if (!reader.load(reinterpret_cast<char *>(buffer), fsize)) {
-        DEBUG_FUNCTION_LINE("Can't find or process %s", path.c_str());
+        DEBUG_FUNCTION_LINE_ERR("Can't find or process %s", path.c_str());
         free(buffer);
         return {};
     }
@@ -60,7 +60,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
     }
 
     if (sizeOfModule > maximum_size) {
-        DEBUG_FUNCTION_LINE("Module is too big.");
+        DEBUG_FUNCTION_LINE_ERR("Module is too big.");
         free(destinations);
         free(buffer);
         return {};
@@ -88,7 +88,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
 
             totalSize += sectionSize;
             if (totalSize > maximum_size) {
-                DEBUG_FUNCTION_LINE("Couldn't load setup module because it's too big.");
+                DEBUG_FUNCTION_LINE_ERR("Couldn't load setup module because it's too big.");
                 free(destinations);
                 free(buffer);
                 return {};
@@ -111,7 +111,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
                 destination -= 0xC0000000;
                 destinations[psec->get_index()] -= 0xC0000000;
             } else {
-                DEBUG_FUNCTION_LINE("Unhandled case");
+                DEBUG_FUNCTION_LINE_ERR("Unhandled case");
                 free(destinations);
                 free(buffer);
                 return std::nullopt;
@@ -150,7 +150,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
         if ((psec->get_type() == SHT_PROGBITS || psec->get_type() == SHT_NOBITS) && (psec->get_flags() & SHF_ALLOC)) {
             DEBUG_FUNCTION_LINE("Linking (%d)... %s", i, psec->get_name().c_str());
             if (!linkSection(reader, psec->get_index(), (uint32_t) destinations[psec->get_index()], offset_text, offset_data, trampolin_data, trampolin_data_length)) {
-                DEBUG_FUNCTION_LINE("elfLink failed");
+                DEBUG_FUNCTION_LINE_ERR("elfLink failed");
                 free(destinations);
                 free(buffer);
                 return std::nullopt;
@@ -193,7 +193,7 @@ std::vector<std::shared_ptr<RelocationData>> ModuleDataFactory::getImportRelocat
     for (uint32_t i = 0; i < sec_num; ++i) {
         section *psec = reader.sections[i];
         if (psec->get_type() == SHT_RELA || psec->get_type() == SHT_REL) {
-            DEBUG_FUNCTION_LINE("Found relocation section %s", psec->get_name().c_str());
+            DEBUG_FUNCTION_LINE_VERBOSE("Found relocation section %s", psec->get_name().c_str());
             relocation_section_accessor rel(reader, psec);
             for (uint32_t j = 0; j < (uint32_t) rel.get_entries_num(); ++j) {
                 Elf64_Addr offset;
@@ -204,7 +204,7 @@ std::vector<std::shared_ptr<RelocationData>> ModuleDataFactory::getImportRelocat
                 Elf_Half sym_section_index;
 
                 if (!rel.get_entry(j, offset, sym_value, sym_name, type, addend, sym_section_index)) {
-                    DEBUG_FUNCTION_LINE("Failed to get relocation");
+                    DEBUG_FUNCTION_LINE_ERR("Failed to get relocation");
                     break;
                 }
 
@@ -214,7 +214,7 @@ std::vector<std::shared_ptr<RelocationData>> ModuleDataFactory::getImportRelocat
                 }
                 auto rplInfo = ImportRPLInformation::createImportRPLInformation(infoMap[sym_section_index]);
                 if (!rplInfo) {
-                    DEBUG_FUNCTION_LINE("Failed to create import information");
+                    DEBUG_FUNCTION_LINE_ERR("Failed to create import information");
                     break;
                 }
 
@@ -237,7 +237,7 @@ bool ModuleDataFactory::linkSection(elfio &reader, uint32_t section_index, uint3
     for (uint32_t i = 0; i < sec_num; ++i) {
         section *psec = reader.sections[i];
         if (psec->get_info() == section_index) {
-            DEBUG_FUNCTION_LINE("Found relocation section %s", psec->get_name().c_str());
+            DEBUG_FUNCTION_LINE_VERBOSE("Found relocation section %s", psec->get_name().c_str());
             relocation_section_accessor rel(reader, psec);
             for (uint32_t j = 0; j < (uint32_t) rel.get_entries_num(); ++j) {
                 Elf64_Addr offset;
@@ -248,7 +248,7 @@ bool ModuleDataFactory::linkSection(elfio &reader, uint32_t section_index, uint3
                 Elf_Half sym_section_index;
 
                 if (!rel.get_entry(j, offset, sym_value, sym_name, type, addend, sym_section_index)) {
-                    DEBUG_FUNCTION_LINE("Failed to get relocation");
+                    DEBUG_FUNCTION_LINE_ERR("Failed to get relocation");
                     break;
                 }
 
@@ -265,23 +265,23 @@ bool ModuleDataFactory::linkSection(elfio &reader, uint32_t section_index, uint3
                 } else if (adjusted_sym_value == 0x0) {
                     //
                 } else {
-                    DEBUG_FUNCTION_LINE("Unhandled case %08X", adjusted_sym_value);
+                    DEBUG_FUNCTION_LINE_ERR("Unhandled case %08X", adjusted_sym_value);
                     return false;
                 }
 
                 if (sym_section_index == SHN_ABS) {
                     //
                 } else if (sym_section_index > SHN_LORESERVE) {
-                    DEBUG_FUNCTION_LINE("NOT IMPLEMENTED: %04X", sym_section_index);
+                    DEBUG_FUNCTION_LINE_ERR("NOT IMPLEMENTED: %04X", sym_section_index);
                     return false;
                 }
 
                 if (!ElfUtils::elfLinkOne(type, offset, addend, destination, adjusted_sym_value, trampolin_data, trampolin_data_length, RELOC_TYPE_FIXED)) {
-                    DEBUG_FUNCTION_LINE("Link failed");
+                    DEBUG_FUNCTION_LINE_ERR("Link failed");
                     return false;
                 }
             }
-            DEBUG_FUNCTION_LINE("done");
+            DEBUG_FUNCTION_LINE_VERBOSE("done");
         }
     }
     return true;

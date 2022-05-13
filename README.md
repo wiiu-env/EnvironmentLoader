@@ -23,6 +23,15 @@ When launching an given enviroment, all `.rpx` files in `[ENVIRONMENT]/modules/s
 - Make sure not to call `exit` in the setup payloads
 - The files will be run in the order of their ordered filenames.
 
+## Buildflags
+
+### Logging
+Building via `make` only logs errors (via OSReport). To enable logging via the [LoggingModule](https://github.com/wiiu-env/LoggingModule) set `DEBUG` to `1` or `VERBOSE`.
+
+`make` Logs errors only (via OSReport).  
+`make DEBUG=1` Enables information and error logging via [LoggingModule](https://github.com/wiiu-env/LoggingModule).  
+`make DEBUG=VERBOSE` Enables verbose information and error logging via [LoggingModule](https://github.com/wiiu-env/LoggingModule).
+
 ## Building
 Make you to have [wut](https://github.com/devkitPro/wut/) installed and use the following command for build:
 ```
