@@ -38,9 +38,14 @@ CFLAGS	+=	$(INCLUDE) -D__WIIU__ -D__WUT__
 
 CXXFLAGS	:= $(CFLAGS) -std=c++20 -fno-exceptions -fno-rtti
 
-ifeq ($(DEBUG),1)    
+ifeq ($(DEBUG),1)
 CXXFLAGS += -DDEBUG -g
 CFLAGS += -DDEBUG -g
+endif
+
+ifeq ($(DEBUG),VERBOSE)
+CXXFLAGS += -DDEBUG -DVERBOSE_DEBUG -g
+CFLAGS += -DDEBUG -DVERBOSE_DEBUG -g
 endif
 
 ASFLAGS	:=	-g $(ARCH)

@@ -63,7 +63,7 @@ extern "C" uint32_t textStart();
 std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> &payloads, int32_t autobootIndex);
 
 std::optional<std::string> getFileContent(const std::string &path) {
-    DEBUG_FUNCTION_LINE("Read %s", path.c_str());
+    DEBUG_FUNCTION_LINE_VERBOSE("Read from file %s", path.c_str());
     FILE *f = fopen(path.c_str(), "r");
     if (f) {
         char buf[128]{};
@@ -72,12 +72,12 @@ std::optional<std::string> getFileContent(const std::string &path) {
 
         return std::string(buf);
     }
-    DEBUG_FUNCTION_LINE("Failed");
+    DEBUG_FUNCTION_LINE_ERR("Failed to load %s", path.c_str());
     return {};
 }
 
 bool writeFileContent(const std::string &path, const std::string &content) {
-    DEBUG_FUNCTION_LINE("Write to file %s: %s", path.c_str(), content.c_str());
+    DEBUG_FUNCTION_LINE_VERBOSE("Write to file %s: %s", path.c_str(), content.c_str());
     FILE *f = fopen(path.c_str(), "w");
     if (f) {
         fputs(content.c_str(), f);
@@ -88,7 +88,6 @@ bool writeFileContent(const std::string &path, const std::string &content) {
 }
 
 extern "C" void __fini();
-
 
 int main(int argc, char **argv) {
     initLogging();
@@ -133,7 +132,7 @@ int main(int argc, char **argv) {
         auto res           = getFileContent(AUTOBOOT_CONFIG_PATH);
         auto autobootIndex = -1;
         if (res) {
-            DEBUG_FUNCTION_LINE("Got result %s", res->c_str());
+            DEBUG_FUNCTION_LINE_VERBOSE("Got result %s", res->c_str());
             for (int i = 0; i < environmentDirs.GetFilecount(); i++) {
                 if (environmentDirs.GetFilename(i) == res.value()) {
                     DEBUG_FUNCTION_LINE("Found environment %s from config at index %d", res.value().c_str(), i);
@@ -144,7 +143,7 @@ int main(int argc, char **argv) {
                 }
             }
         } else {
-            DEBUG_FUNCTION_LINE("No config found");
+            DEBUG_FUNCTION_LINE_ERR("No config found");
         }
 
         std::map<std::string, std::string> environmentPaths;
@@ -162,12 +161,12 @@ int main(int argc, char **argv) {
         }
 
         if (forceMenu || (btn & VPAD_BUTTON_X) == VPAD_BUTTON_X) {
-            DEBUG_FUNCTION_LINE("Open menu!");
+            DEBUG_FUNCTION_LINE_VERBOSE("Open menu!");
             environment_path = EnvironmentSelectionScreen(environmentPaths, autobootIndex);
             if (environmentPaths.empty()) {
                 noEnvironmentsFound = true;
             } else {
-                DEBUG_FUNCTION_LINE("Selected %s", environment_path.c_str());
+                DEBUG_FUNCTION_LINE_VERBOSE("Selected %s", environment_path.c_str());
             }
         }
     }
@@ -184,12 +183,13 @@ int main(int argc, char **argv) {
             auto moduleData = ModuleDataFactory::load(setupModules.GetFilepath(i), destination_address_end, ((uint32_t) gModuleData) - MEMORY_REGION_START, gModuleData->trampolines,
                                                       DYN_LINK_TRAMPOLIN_LIST_LENGTH);
             if (!moduleData) {
-                DEBUG_FUNCTION_LINE("Failed to load %s", setupModules.GetFilepath(i));
+                DEBUG_FUNCTION_LINE_ERR("Failed to load %s", setupModules.GetFilepath(i));
                 continue;
             }
             DEBUG_FUNCTION_LINE("Loaded module data");
             auto relocData = moduleData.value()->getRelocationDataList();
             if (!ElfUtils::doRelocation(relocData, gModuleData->trampolines, DYN_LINK_TRAMPOLIN_LIST_LENGTH)) {
+                DEBUG_FUNCTION_LINE_ERR("Relocations failed");
                 OSFatal("Relocations failed");
             } else {
                 DEBUG_FUNCTION_LINE("Relocation done");
@@ -213,7 +213,7 @@ int main(int argc, char **argv) {
             if (strcmp(argv[i], "void forceDefaultTitleIDToWiiUMenu(void)") == 0) {
                 if ((i + 1) < argc) {
                     i++;
-                    DEBUG_FUNCTION_LINE("call forceDefaultTitleIDToWiiUMenu");
+                    DEBUG_FUNCTION_LINE_VERBOSE("call forceDefaultTitleIDToWiiUMenu");
                     // clang-format off
                     auto forceDefaultTitleIDToWiiUMenu = (void(*)()) argv[i];
                     // clang-format on
