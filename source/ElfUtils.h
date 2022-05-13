@@ -50,5 +50,5 @@ public:
                            RelocationType reloc_type);
 
 
-    static bool doRelocation(std::vector<std::shared_ptr<RelocationData>> &relocData, relocation_trampoline_entry_t *tramp_data, uint32_t tramp_length);
+    static bool doRelocation(const std::vector<std::unique_ptr<RelocationData>> &relocData, relocation_trampoline_entry_t *tramp_data, uint32_t tramp_length);
 };

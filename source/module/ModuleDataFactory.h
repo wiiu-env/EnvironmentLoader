@@ -26,11 +26,11 @@
 
 class ModuleDataFactory {
 public:
-    static std::optional<std::shared_ptr<ModuleData>>
+    static std::optional<std::unique_ptr<ModuleData>>
     load(const std::string &path, uint32_t destination_address_end, uint32_t maximum_size, relocation_trampoline_entry_t *trampoline_data, uint32_t trampoline_data_length);
 
     static bool linkSection(ELFIO::elfio &reader, uint32_t section_index, uint32_t destination, uint32_t base_text, uint32_t base_data, relocation_trampoline_entry_t *trampoline_data,
                             uint32_t trampoline_data_length);
 
-    static std::vector<std::shared_ptr<RelocationData>> getImportRelocationData(ELFIO::elfio &reader, uint8_t **destinations);
+    static bool getImportRelocationData(std::unique_ptr<ModuleData> &moduleData, ELFIO::elfio &reader, uint8_t **destinations);
 };
