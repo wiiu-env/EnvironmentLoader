@@ -19,7 +19,7 @@ bool ElfUtils::doRelocation(std::vector<std::shared_ptr<RelocationData>> &relocD
         auto err = OSDynLoad_IsModuleLoaded(rplName.c_str(), &rplHandle);
         if (err != OS_DYNLOAD_OK || rplHandle == 0) {
             // only acquire if not already loaded.
-            auto res = OSDynLoad_Acquire(rplName.c_str(), &rplHandle);
+            OSDynLoad_Acquire(rplName.c_str(), &rplHandle);
         }
 
         uint32_t functionAddress = 0;
