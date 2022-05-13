@@ -309,11 +309,11 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
                     if (i == selected) {
                         DrawUtils::drawRect(16, index, SCREEN_WIDTH - 16 * 2, 44, 4, COLOR_BORDER_HIGHLIGHTED);
                     } else {
-                        DrawUtils::drawRect(16, index, SCREEN_WIDTH - 16 * 2, 44, 2, (i == autoBoot) ? COLOR_AUTOBOOT : COLOR_BORDER);
+                        DrawUtils::drawRect(16, index, SCREEN_WIDTH - 16 * 2, 44, 2, ((int32_t) i == autoBoot) ? COLOR_AUTOBOOT : COLOR_BORDER);
                     }
 
                     DrawUtils::setFontSize(24);
-                    DrawUtils::setFontColor((i == autoBoot) ? COLOR_AUTOBOOT : COLOR_TEXT);
+                    DrawUtils::setFontColor(((int32_t) i == autoBoot) ? COLOR_AUTOBOOT : COLOR_TEXT);
                     DrawUtils::print(16 * 2, index + 8 + 24, key.c_str());
                     index += 42 + 8;
                     i++;
@@ -377,7 +377,7 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
         }
     }
 
-    int i = 0;
+    uint32_t i = 0;
     for (auto const &[key, val] : payloads) {
         if (i == selected) {
             return val;
