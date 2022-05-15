@@ -177,6 +177,12 @@ int main(int argc, char **argv) {
         setupModules.SortList();
 
         for (int i = 0; i < setupModules.GetFilecount(); i++) {
+            //! skip hidden linux and mac files
+            if (setupModules.GetFilename(i)[0] == '.' || setupModules.GetFilename(i)[0] == '_') {
+                DEBUG_FUNCTION_LINE_ERR("Skip file %s", setupModules.GetFilepath(i));
+                continue;
+            }
+
             uint32_t destination_address_end = ((uint32_t) gModuleData) & 0xFFFF0000;
             memset((void *) gModuleData, 0, sizeof(module_information_t));
             DEBUG_FUNCTION_LINE("Trying to run %s.", setupModules.GetFilepath(i), destination_address_end, ((uint32_t) gModuleData) - MEMORY_REGION_START);
