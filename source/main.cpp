@@ -88,8 +88,11 @@ bool writeFileContent(const std::string &path, const std::string &content) {
 }
 
 extern "C" void __fini();
+extern "C" void __init_wut_malloc();
 
 int main(int argc, char **argv) {
+    // We need to call __init_wut_malloc somewhere so wut_malloc will be used for the memory allocation.
+    __init_wut_malloc();
     initLogging();
 
     if (IOS_Open((char *) ("/dev/iosuhax"), static_cast<IOSOpenMode>(0)) >= 0) {
