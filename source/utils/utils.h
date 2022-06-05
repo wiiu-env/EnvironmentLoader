@@ -7,7 +7,7 @@ std::unique_ptr<T> make_unique_nothrow(Args &&...args) noexcept(noexcept(T(std::
 }
 
 template<typename T>
-inline typename std::_MakeUniq<T>::__array make_unique_nothrow(size_t num) noexcept {
+inline typename std::unique_ptr<T> make_unique_nothrow(size_t num) noexcept {
     return std::unique_ptr<T>(new (std::nothrow) std::remove_extent_t<T>[num]());
 }
 
