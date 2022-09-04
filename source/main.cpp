@@ -4,6 +4,7 @@
 #include <coreinit/cache.h>
 #include <coreinit/debug.h>
 #include <coreinit/dynload.h>
+#include <coreinit/filesystem_fsa.h>
 #include <coreinit/foreground.h>
 #include <coreinit/ios.h>
 #include <coreinit/screen.h>
@@ -184,6 +185,14 @@ int main(int argc, char **argv) {
             if (setupModules.GetFilename(i)[0] == '.' || setupModules.GetFilename(i)[0] == '_') {
                 DEBUG_FUNCTION_LINE_ERR("Skip file %s", setupModules.GetFilepath(i));
                 continue;
+            }
+
+            // Some module may unmount the sd card on exit.
+            FSAInit();
+            auto client = FSAAddClient(nullptr);
+            if (client) {
+                FSAMount(client, "/dev/sdcard01", "/vol/external01", static_cast<FSAMountFlags>(0), nullptr, 0);
+                FSADelClient(client);
             }
 
             uint32_t destination_address_end = ((uint32_t) gModuleData) & 0xFFFF0000;
