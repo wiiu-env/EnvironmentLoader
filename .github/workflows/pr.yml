@@ -4,14 +4,14 @@ on: [pull_request]
 
 jobs:
   clang-format:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v2
     - name: clang-format
       run: |
         docker run --rm -v ${PWD}:/src  wiiuenv/clang-format:13.0.0-2 -r ./source
   check-build-with-logging:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     needs: clang-format
     steps:
       - uses: actions/checkout@v2
@@ -22,7 +22,7 @@ jobs:
           docker run --rm -v ${PWD}:/project builder make clean
           docker run --rm -v ${PWD}:/project builder make DEBUG=1
   build-binary:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     needs: clang-format
     steps:
     - uses: actions/checkout@v2
