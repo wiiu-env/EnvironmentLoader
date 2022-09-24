@@ -132,27 +132,29 @@ int main(int argc, char **argv) {
     if (strncmp(environmentPath, "fs:/vol/external01/wiiu/environments/", strlen("fs:/vol/external01/wiiu/environments/")) != 0) {
         DirList environmentDirs("fs:/vol/external01/wiiu/environments/", nullptr, DirList::Dirs, 1);
 
+        std::map<std::string, std::string> environmentPaths;
+        for (int i = 0; i < environmentDirs.GetFilecount(); i++) {
+            environmentPaths[environmentDirs.GetFilename(i)] = environmentDirs.GetFilepath(i);
+        }
+
         bool forceMenu     = true;
         auto res           = getFileContent(AUTOBOOT_CONFIG_PATH);
         auto autobootIndex = -1;
         if (res) {
             DEBUG_FUNCTION_LINE_VERBOSE("Got result %s", res->c_str());
-            for (int i = 0; i < environmentDirs.GetFilecount(); i++) {
-                if (environmentDirs.GetFilename(i) == res.value()) {
+            int32_t i = 0;
+            for (auto const &[key, val] : environmentPaths) {
+                if (res.value() == key) {
                     DEBUG_FUNCTION_LINE("Found environment %s from config at index %d", res.value().c_str(), i);
                     autobootIndex    = i;
-                    environment_path = environmentDirs.GetFilepath(i);
+                    environment_path = val;
                     forceMenu        = false;
                     break;
                 }
+                i++;
             }
         } else {
             DEBUG_FUNCTION_LINE_ERR("No config found");
-        }
-
-        std::map<std::string, std::string> environmentPaths;
-        for (int i = 0; i < environmentDirs.GetFilecount(); i++) {
-            environmentPaths[environmentDirs.GetFilename(i)] = environmentDirs.GetFilepath(i);
         }
 
         VPADReadError err;
