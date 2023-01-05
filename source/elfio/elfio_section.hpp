@@ -1,6 +1,5 @@
-// clang-format off
 /*
-Copyright (C) 2001-2015 by Serge Lamikhov-Center
+Copyright (C) 2001-present by Serge Lamikhov-Center
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -25,321 +24,258 @@ THE SOFTWARE.
 #define ELFIO_SECTION_HPP
 
 #include <string>
-#include <iostream>
-#include "utils/logger.h"
-#include <zlib.h>
+#include <new>
+#include <limits>
 
 namespace ELFIO {
 
 class section
 {
     friend class elfio;
+
   public:
-    virtual ~section() {};
+    virtual ~section() = default;
 
-    ELFIO_GET_ACCESS_DECL    ( Elf_Half,    index              );
-    ELFIO_GET_SET_ACCESS_DECL( std::string, name               );
-    ELFIO_GET_SET_ACCESS_DECL( Elf_Word,    type               );
-    ELFIO_GET_SET_ACCESS_DECL( Elf_Xword,   flags              );
-    ELFIO_GET_SET_ACCESS_DECL( Elf_Word,    info               );
-    ELFIO_GET_SET_ACCESS_DECL( Elf_Word,    link               );
-    ELFIO_GET_SET_ACCESS_DECL( Elf_Xword,   addr_align         );
-    ELFIO_GET_SET_ACCESS_DECL( Elf_Xword,   entry_size         );
-    ELFIO_GET_SET_ACCESS_DECL( Elf64_Addr,  address            );
-    ELFIO_GET_SET_ACCESS_DECL( Elf_Xword,   size               );
-    ELFIO_GET_SET_ACCESS_DECL( Elf_Word,    name_string_offset );
-    ELFIO_GET_ACCESS_DECL    ( Elf64_Off,   offset             );
-    size_t stream_size;
-    size_t get_stream_size() const
-     {
-    return stream_size;
-     }
+    ELFIO_GET_ACCESS_DECL( Elf_Half, index );
+    ELFIO_GET_SET_ACCESS_DECL( std::string, name );
+    ELFIO_GET_SET_ACCESS_DECL( Elf_Word, type );
+    ELFIO_GET_SET_ACCESS_DECL( Elf_Xword, flags );
+    ELFIO_GET_SET_ACCESS_DECL( Elf_Word, info );
+    ELFIO_GET_SET_ACCESS_DECL( Elf_Word, link );
+    ELFIO_GET_SET_ACCESS_DECL( Elf_Xword, addr_align );
+    ELFIO_GET_SET_ACCESS_DECL( Elf_Xword, entry_size );
+    ELFIO_GET_SET_ACCESS_DECL( Elf64_Addr, address );
+    ELFIO_GET_SET_ACCESS_DECL( Elf_Xword, size );
+    ELFIO_GET_SET_ACCESS_DECL( Elf_Word, name_string_offset );
+    ELFIO_GET_ACCESS_DECL( Elf64_Off, offset );
 
-    void set_stream_size(size_t value)
-     {
-    stream_size = value;
-     }
-
-    virtual const char* get_data() const                                = 0;
-    virtual void        set_data( const char* pData, Elf_Word size )    = 0;
-    virtual void        set_data( const std::string& data )             = 0;
-    virtual void        append_data( const char* pData, Elf_Word size ) = 0;
-    virtual void        append_data( const std::string& data )          = 0;
+    virtual const char* get_data() const                                   = 0;
+    virtual void        set_data( const char* raw_data, Elf_Word size )    = 0;
+    virtual void        set_data( const std::string& data )                = 0;
+    virtual void        append_data( const char* raw_data, Elf_Word size ) = 0;
+    virtual void        append_data( const std::string& data )             = 0;
+    virtual void
+    insert_data( Elf_Xword pos, const char* raw_data, Elf_Word size )    = 0;
+    virtual void   insert_data( Elf_Xword pos, const std::string& data ) = 0;
 
   protected:
     ELFIO_SET_ACCESS_DECL( Elf64_Off, offset );
-    ELFIO_SET_ACCESS_DECL( Elf_Half,  index  );
+    ELFIO_SET_ACCESS_DECL( Elf_Half, index );
 
-    virtual void load( std::istream&  stream,
-                       std::streampos header_offset ) = 0;
-    virtual void save( std::ostream&  stream,
-                       std::streampos header_offset,
-                       std::streampos data_offset )   = 0;
-    virtual bool is_address_initialized() const       = 0;
+    virtual bool load( const char * pBuffer, size_t pBufferSize,
+                       off_t header_offset)               = 0;
+    virtual bool is_address_initialized() const     = 0;
 };
 
-
-template< class T >
-class section_impl : public section
+template <class T> class section_impl : public section
 {
   public:
-//------------------------------------------------------------------------------
-    section_impl( const endianess_convertor* convertor_ ) : convertor( convertor_ )
+    //------------------------------------------------------------------------------
+    section_impl( const endianess_convertor*                    convertor,
+                  const std::shared_ptr<compression_interface>& compression )
+        : convertor( convertor ), compression( compression )
     {
-        std::fill_n( reinterpret_cast<char*>( &header ), sizeof( header ), '\0' );
-        is_address_set = false;
-        data           = 0;
-        data_size      = 0;
     }
 
-//------------------------------------------------------------------------------
-    ~section_impl()
-    {
-        delete [] data;
-    }
-
-//------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------
     // Section info functions
-    ELFIO_GET_SET_ACCESS( Elf_Word,   type,               header.sh_type      );
-    ELFIO_GET_SET_ACCESS( Elf_Xword,  flags,              header.sh_flags     );
-    ELFIO_GET_SET_ACCESS( Elf_Xword,  size,               header.sh_size      );
-    ELFIO_GET_SET_ACCESS( Elf_Word,   link,               header.sh_link      );
-    ELFIO_GET_SET_ACCESS( Elf_Word,   info,               header.sh_info      );
-    ELFIO_GET_SET_ACCESS( Elf_Xword,  addr_align,         header.sh_addralign );
-    ELFIO_GET_SET_ACCESS( Elf_Xword,  entry_size,         header.sh_entsize   );
-    ELFIO_GET_SET_ACCESS( Elf_Word,   name_string_offset, header.sh_name      );
-    ELFIO_GET_ACCESS    ( Elf64_Addr, address,            header.sh_addr      );
+    ELFIO_GET_SET_ACCESS( Elf_Word, type, header.sh_type );
+    ELFIO_GET_SET_ACCESS( Elf_Xword, flags, header.sh_flags );
+    ELFIO_GET_SET_ACCESS( Elf_Xword, size, header.sh_size );
+    ELFIO_GET_SET_ACCESS( Elf_Word, link, header.sh_link );
+    ELFIO_GET_SET_ACCESS( Elf_Word, info, header.sh_info );
+    ELFIO_GET_SET_ACCESS( Elf_Xword, addr_align, header.sh_addralign );
+    ELFIO_GET_SET_ACCESS( Elf_Xword, entry_size, header.sh_entsize );
+    ELFIO_GET_SET_ACCESS( Elf_Word, name_string_offset, header.sh_name );
+    ELFIO_GET_ACCESS( Elf64_Addr, address, header.sh_addr );
+    //------------------------------------------------------------------------------
+    Elf_Half get_index() const override { return index; }
 
+    //------------------------------------------------------------------------------
+    std::string get_name() const override { return name; }
 
-//------------------------------------------------------------------------------
-    Elf_Half
-    get_index() const
+    //------------------------------------------------------------------------------
+    void set_name( const std::string& name_prm ) override
     {
-        return index;
+        this->name = name_prm;
     }
 
-
-//------------------------------------------------------------------------------
-    std::string
-    get_name() const
+    //------------------------------------------------------------------------------
+    void set_address( const Elf64_Addr& value ) override
     {
-        return name;
-    }
-
-//------------------------------------------------------------------------------
-    void
-    set_name( std::string name_ )
-    {
-        name = name_;
-    }
-
-//------------------------------------------------------------------------------
-    void
-    set_address( Elf64_Addr value )
-    {
-        header.sh_addr = value;
-        header.sh_addr = (*convertor)( header.sh_addr );
+        header.sh_addr = decltype( header.sh_addr )( value );
+        header.sh_addr = ( *convertor )( header.sh_addr );
         is_address_set = true;
     }
 
-//------------------------------------------------------------------------------
-    bool
-    is_address_initialized() const
+    //------------------------------------------------------------------------------
+    bool is_address_initialized() const override { return is_address_set; }
+
+    //------------------------------------------------------------------------------
+    const char* get_data() const override
     {
-        return is_address_set;
+        return data.get();
     }
 
-//------------------------------------------------------------------------------
-    const char*
-    get_data() const
-    {
-        return data;
-    }
-
-//------------------------------------------------------------------------------
-    void
-    set_data( const char* raw_data, Elf_Word size )
+    //------------------------------------------------------------------------------
+    void set_data( const char* raw_data, Elf_Word size ) override
     {
         if ( get_type() != SHT_NOBITS ) {
-            delete [] data;            
-            data = new char[size];            
-            if ( 0 != data && 0 != raw_data ) {
+            data = std::unique_ptr<char[]>( new ( std::nothrow ) char[size] );
+            if ( nullptr != data.get() && nullptr != raw_data ) {
                 data_size = size;
-                std::copy( raw_data, raw_data + size, data );
+                std::copy( raw_data, raw_data + size, data.get() );
+            }
+            else {
+                data_size = 0;
             }
         }
 
-        set_size( size );
+        set_size( data_size );
     }
 
-//------------------------------------------------------------------------------
-    void
-    set_data( const std::string& str_data )
+    //------------------------------------------------------------------------------
+    void set_data( const std::string& str_data ) override
     {
         return set_data( str_data.c_str(), (Elf_Word)str_data.size() );
     }
 
-//------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------
+    void append_data( const char* raw_data, Elf_Word size ) override
+    {
+        insert_data( get_size(), raw_data, size );
+    }
+
+    //------------------------------------------------------------------------------
+    void append_data( const std::string& str_data ) override
+    {
+        return append_data( str_data.c_str(), (Elf_Word)str_data.size() );
+    }
+
+    //------------------------------------------------------------------------------
     void
-    append_data( const char* raw_data, Elf_Word size )
+    insert_data( Elf_Xword pos, const char* raw_data, Elf_Word size ) override
     {
         if ( get_type() != SHT_NOBITS ) {
             if ( get_size() + size < data_size ) {
-                std::copy( raw_data, raw_data + size, data + get_size() );
+                char* d = data.get();
+                std::copy_backward( d + pos, d + get_size(),
+                                    d + get_size() + size );
+                std::copy( raw_data, raw_data + size, d + pos );
             }
             else {
-                data_size = 2*( data_size + size);
-                char* new_data;
-                new_data = new char[data_size];
+                data_size = 2 * ( data_size + size );
+                std::unique_ptr<char[]> new_data(
+                    new ( std::nothrow ) char[data_size] );
 
-                if ( 0 != new_data ) {
-                    std::copy( data, data + get_size(), new_data );
-                    std::copy( raw_data, raw_data + size, new_data + get_size() );
-                    delete [] data;
-                    data = new_data;
+                if ( nullptr != new_data ) {
+                    char* d = data.get();
+                    std::copy( d, d + pos, new_data.get() );
+                    std::copy( raw_data, raw_data + size,
+                               new_data.get() + pos );
+                    std::copy( d + pos, d + get_size(),
+                               new_data.get() + pos + size );
+                    data = std::move( new_data );
+                }
+                else {
+                    size = 0;
                 }
             }
             set_size( get_size() + size );
         }
     }
 
-//------------------------------------------------------------------------------
-    void
-    append_data( const std::string& str_data )
+    //------------------------------------------------------------------------------
+    void insert_data( Elf_Xword pos, const std::string& str_data ) override
     {
-        return append_data( str_data.c_str(), (Elf_Word)str_data.size() );
+        return insert_data( pos, str_data.c_str(), (Elf_Word)str_data.size() );
     }
 
-//------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------
   protected:
-//------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------
     ELFIO_GET_SET_ACCESS( Elf64_Off, offset, header.sh_offset );
 
-//------------------------------------------------------------------------------
-    void
-    set_index( Elf_Half value )
+    //------------------------------------------------------------------------------
+    void set_index( const Elf_Half& value ) override { index = value; }
+
+    bool is_compressed() const
     {
-        index = value;
+        return ( ( get_flags() & SHF_RPX_DEFLATE ) ||
+                 ( get_flags() & SHF_COMPRESSED ) ) &&
+               compression != nullptr;
     }
 
-//------------------------------------------------------------------------------
-    void
-    load( std::istream&  stream,
-          std::streampos header_offset )
+    //------------------------------------------------------------------------------
+    bool load( const char * pBuffer, size_t pBufferSize,
+               off_t header_offset) override
     {
-        std::fill_n( reinterpret_cast<char*>( &header ), sizeof( header ), '\0' );
+        header  = { };
 
-        stream.seekg ( 0, stream.end );
-        set_stream_size ( stream.tellg() );
+        if( header_offset + sizeof( header ) > pBufferSize ) {
+            return false;
+        }
+        memcpy( reinterpret_cast<char*>( &header ), pBuffer + header_offset, sizeof( header ) );
 
-        stream.seekg( header_offset );
-        stream.read( reinterpret_cast<char*>( &header ), sizeof( header ) );
+        bool ret = load_data(pBuffer, pBufferSize);
 
-
-        Elf_Xword size = get_size();
-        if ( 0 == data && SHT_NULL != get_type() && SHT_NOBITS != get_type() && size < get_stream_size()) {
-
-            data = new char[size + 1];
-
-            if ( ( 0 != size ) && ( 0 != data ) ) {
-                stream.seekg( (*convertor)( header.sh_offset ) );
-                if (get_flags() & 0x08000000){
-                    uint32_t uncompressed_size = size;
-                    stream.read( (char *) &uncompressed_size, 4);
-                    stream.read( data, size - 4);
-
-                    char* uncompressedData = new char[uncompressed_size + 1];
-
-                    int ret = 0;
-                    z_stream s;
-                    memset(&s, 0, sizeof(s));
-
-                    s.zalloc = Z_NULL;
-                    s.zfree = Z_NULL;
-                    s.opaque = Z_NULL;
-
-                    ret = inflateInit_(&s, ZLIB_VERSION, sizeof(s));
-                    if (ret != Z_OK)
-                        return;
-
-                    s.avail_in = size - 4;
-                    s.next_in = (Bytef *)data;
-
-                    s.avail_out = uncompressed_size;
-                    s.next_out = (Bytef *)&uncompressedData[0];
-
-                    ret = inflate(&s, Z_FINISH);
-                    if (ret != Z_OK && ret != Z_STREAM_END){
-                        DEBUG_FUNCTION_LINE("NOOOO");
-                    }
-
-                    inflateEnd(&s);
-
-                    delete [] data;
-                    data = uncompressedData;
-                    data_size = uncompressed_size;
-                    set_size(uncompressed_size);
-                    data[data_size] = 0; // Ensure data is ended with 0 to avoid oob read
-
-                }else{
-                    stream.read( data, size );
-                    data[size] = 0; // Ensure data is ended with 0 to avoid oob read
-                    data_size = size;
-                }
-            }else{
-                set_size(0);
-                DEBUG_FUNCTION_LINE("Failed to allocate memory.");
+        if (ret && is_compressed() ) {
+            Elf_Xword size              = get_size();
+            Elf_Xword uncompressed_size = 0;
+            auto      decompressed_data = compression->inflate(
+                data.get(), convertor, size, uncompressed_size );
+            if ( decompressed_data != nullptr ) {
+                set_size( uncompressed_size );
+                data = std::move( decompressed_data );
             }
         }
+
+        return ret;
     }
 
-//------------------------------------------------------------------------------
-    void
-    save( std::ostream&  stream,
-          std::streampos header_offset,
-          std::streampos data_offset )
+    bool load_data(const char * pBuffer, size_t pBufferSize) const
     {
-        if ( 0 != get_index() ) {
-            header.sh_offset = data_offset;
-            header.sh_offset = (*convertor)( header.sh_offset );
+        Elf_Xword size = get_size();
+        if ( nullptr == data && SHT_NULL != get_type() &&
+             SHT_NOBITS != get_type() && size < pBufferSize ) {
+            data.reset( new ( std::nothrow ) char[size_t( size ) + 1] );
+
+            if ( ( 0 != size ) && ( nullptr != data ) ) {
+                auto offset = ( *convertor )( header.sh_offset );
+                if(offset + size > pBufferSize) {
+                    data = nullptr;
+                    return false;
+                }
+                memcpy( data.get(), pBuffer + offset, size );
+
+                // refresh size because it may have changed if we had to decompress data
+                size = get_size();
+                data.get()[size] =
+                    0; // Ensure data is ended with 0 to avoid oob read
+                data_size = decltype( data_size )( size );
+            }
+            else {
+                data_size = 0;
+            }
         }
 
-        save_header( stream, header_offset );
-        if ( get_type() != SHT_NOBITS && get_type() != SHT_NULL &&
-             get_size() != 0 && data != 0 ) {
-            save_data( stream, data_offset );
-        }
+        return true;
     }
 
-//------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------
   private:
-//------------------------------------------------------------------------------
-    void
-    save_header( std::ostream&  stream,
-                 std::streampos header_offset ) const
-    {
-        stream.seekp( header_offset );
-        stream.write( reinterpret_cast<const char*>( &header ), sizeof( header ) );
-    }
-
-//------------------------------------------------------------------------------
-    void
-    save_data( std::ostream&  stream,
-               std::streampos data_offset ) const
-    {
-        stream.seekp( data_offset );
-        stream.write( get_data(), get_size() );
-    }
-
-//------------------------------------------------------------------------------
   private:
-    T                          header;
-    Elf_Half                   index;
-    std::string                name;
-    char*                      data;
-    Elf_Word                   data_size;
-    const endianess_convertor* convertor;
-    bool                       is_address_set;
+
+    //------------------------------------------------------------------------------
+  private:
+    T                                            header  = {};
+    Elf_Half                                     index   = 0;
+    std::string                                  name;
+    mutable std::unique_ptr<char[]>              data;
+    mutable Elf_Word                             data_size      = 0;
+    const endianess_convertor*                   convertor      = nullptr;
+    const std::shared_ptr<compression_interface> compression    = nullptr;
+    bool                                         is_address_set = false;
 };
 
 } // namespace ELFIO
