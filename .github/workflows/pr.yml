@@ -9,7 +9,7 @@ jobs:
     - uses: actions/checkout@v3
     - name: clang-format
       run: |
-        docker run --rm -v ${PWD}:/src  wiiuenv/clang-format:13.0.0-2 -r ./source
+        docker run --rm -v ${PWD}:/src wiiuenv/clang-format:13.0.0-2 -r ./source --exclude ./source/elfio
   check-build-with-logging:
     runs-on: ubuntu-22.04
     needs: clang-format

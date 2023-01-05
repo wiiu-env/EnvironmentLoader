@@ -20,6 +20,7 @@
 #include "ElfUtils.h"
 #include "utils/OnLeavingScope.h"
 #include "utils/utils.h"
+#include "utils/wiiu_zlib.hpp"
 #include <coreinit/cache.h>
 #include <map>
 #include <string>
@@ -27,7 +28,7 @@
 
 std::optional<std::unique_ptr<ModuleData>>
 ModuleDataFactory::load(const std::string &path, uint32_t destination_address_end, uint32_t maximum_size, relocation_trampoline_entry_t *trampoline_data, uint32_t trampoline_data_length) {
-    ELFIO::elfio reader;
+    ELFIO::elfio reader(new wiiu_zlib);
     auto moduleData = make_unique_nothrow<ModuleData>();
     if (!moduleData) {
         DEBUG_FUNCTION_LINE_ERR("Failed to allocate ModuleData");
@@ -65,7 +66,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
             continue;
         }
 
-        if ((psec->get_type() == SHT_PROGBITS || psec->get_type() == SHT_NOBITS) && (psec->get_flags() & SHF_ALLOC)) {
+        if ((psec->get_type() == ELFIO::SHT_PROGBITS || psec->get_type() == ELFIO::SHT_NOBITS) && (psec->get_flags() & ELFIO::SHF_ALLOC)) {
             sizeOfModule += psec->get_size() + 1;
         }
     }
@@ -92,7 +93,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
             continue;
         }
 
-        if ((psec->get_type() == SHT_PROGBITS || psec->get_type() == SHT_NOBITS) && (psec->get_flags() & SHF_ALLOC)) {
+        if ((psec->get_type() == ELFIO::SHT_PROGBITS || psec->get_type() == ELFIO::SHT_NOBITS) && (psec->get_flags() & ELFIO::SHF_ALLOC)) {
             uint32_t sectionSize = psec->get_size();
 
             totalSize += sectionSize;
@@ -129,10 +130,10 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
                 OSFatal("EnvironmentLoader: Tried to overflow buffer");
             }
 
-            if (psec->get_type() == SHT_NOBITS) {
+            if (psec->get_type() == ELFIO::SHT_NOBITS) {
                 DEBUG_FUNCTION_LINE("memset section %s %08X to 0 (%d bytes)", psec->get_name().c_str(), destination, sectionSize);
                 memset((void *) destination, 0, sectionSize);
-            } else if (psec->get_type() == SHT_PROGBITS) {
+            } else if (psec->get_type() == ELFIO::SHT_PROGBITS) {
                 DEBUG_FUNCTION_LINE("Copy section %s %08X -> %08X (%d bytes)", psec->get_name().c_str(), p, destination, sectionSize);
                 memcpy((void *) destination, p, sectionSize);
             }
@@ -154,7 +155,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
 
     for (uint32_t i = 0; i < sec_num; ++i) {
         ELFIO::section *psec = reader.sections[i];
-        if ((psec->get_type() == SHT_PROGBITS || psec->get_type() == SHT_NOBITS) && (psec->get_flags() & SHF_ALLOC)) {
+        if ((psec->get_type() == ELFIO::SHT_PROGBITS || psec->get_type() == ELFIO::SHT_NOBITS) && (psec->get_flags() & ELFIO::SHF_ALLOC)) {
             DEBUG_FUNCTION_LINE("Linking (%d)... %s", i, psec->get_name().c_str());
             if (!linkSection(reader, psec->get_index(), (uint32_t) destinations[psec->get_index()], offset_text, offset_data, trampoline_data, trampoline_data_length)) {
                 DEBUG_FUNCTION_LINE_ERR("elfLink failed");
@@ -194,20 +195,33 @@ bool ModuleDataFactory::getImportRelocationData(std::unique_ptr<ModuleData> &mod
 
     for (uint32_t i = 0; i < sec_num; ++i) {
         ELFIO::section *psec = reader.sections[i];
-        if (psec->get_type() == SHT_RELA || psec->get_type() == SHT_REL) {
+        if (psec->get_type() == ELFIO::SHT_RELA || psec->get_type() == ELFIO::SHT_REL) {
             ELFIO::relocation_section_accessor rel(reader, psec);
             for (uint32_t j = 0; j < (uint32_t) rel.get_entries_num(); ++j) {
+                ELFIO::Elf_Word symbol = 0;
                 ELFIO::Elf64_Addr offset;
                 ELFIO::Elf_Word type;
                 ELFIO::Elf_Sxword addend;
                 std::string sym_name;
                 ELFIO::Elf64_Addr sym_value;
-                ELFIO::Elf_Half sym_section_index;
 
-                if (!rel.get_entry(j, offset, sym_value, sym_name, type, addend, sym_section_index)) {
+                if (!rel.get_entry(j, offset, symbol, type, addend)) {
                     DEBUG_FUNCTION_LINE_ERR("Failed to get relocation");
-                    OSFatal("Failed to get relocation");
-                    break;
+                    return false;
+                }
+                ELFIO::symbol_section_accessor symbols(reader, reader.sections[(ELFIO::Elf_Half) psec->get_link()]);
+
+                // Find the symbol
+                ELFIO::Elf_Xword size;
+                unsigned char bind;
+                unsigned char symbolType;
+                ELFIO::Elf_Half sym_section_index;
+                unsigned char other;
+
+                if (!symbols.get_symbol(symbol, sym_name, sym_value, size,
+                                        bind, symbolType, sym_section_index, other)) {
+                    DEBUG_FUNCTION_LINE_ERR("Failed to get symbol");
+                    return false;
                 }
 
                 auto adjusted_sym_value = (uint32_t) sym_value;
@@ -250,15 +264,29 @@ bool ModuleDataFactory::linkSection(ELFIO::elfio &reader, uint32_t section_index
             DEBUG_FUNCTION_LINE_VERBOSE("Found relocation section %s", psec->get_name().c_str());
             ELFIO::relocation_section_accessor rel(reader, psec);
             for (uint32_t j = 0; j < (uint32_t) rel.get_entries_num(); ++j) {
+                ELFIO::Elf_Word symbol = 0;
                 ELFIO::Elf64_Addr offset;
                 ELFIO::Elf_Word type;
                 ELFIO::Elf_Sxword addend;
                 std::string sym_name;
                 ELFIO::Elf64_Addr sym_value;
-                ELFIO::Elf_Half sym_section_index;
 
-                if (!rel.get_entry(j, offset, sym_value, sym_name, type, addend, sym_section_index)) {
+                if (!rel.get_entry(j, offset, symbol, type, addend)) {
                     DEBUG_FUNCTION_LINE_ERR("Failed to get relocation");
+                    return false;
+                }
+                ELFIO::symbol_section_accessor symbols(reader, reader.sections[(ELFIO::Elf_Half) psec->get_link()]);
+
+                // Find the symbol
+                ELFIO::Elf_Xword size;
+                unsigned char bind;
+                unsigned char symbolType;
+                ELFIO::Elf_Half sym_section_index;
+                unsigned char other;
+
+                if (!symbols.get_symbol(symbol, sym_name, sym_value, size,
+                                        bind, symbolType, sym_section_index, other)) {
+                    DEBUG_FUNCTION_LINE_ERR("Failed to get symbol");
                     return false;
                 }
 
@@ -279,9 +307,9 @@ bool ModuleDataFactory::linkSection(ELFIO::elfio &reader, uint32_t section_index
                     return false;
                 }
 
-                if (sym_section_index == SHN_ABS) {
+                if (sym_section_index == ELFIO::SHN_ABS) {
                     //
-                } else if (sym_section_index > SHN_LORESERVE) {
+                } else if (sym_section_index > ELFIO::SHN_LORESERVE) {
                     DEBUG_FUNCTION_LINE_ERR("NOT IMPLEMENTED: %04X", sym_section_index);
                     return false;
                 }
