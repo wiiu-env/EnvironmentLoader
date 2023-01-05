@@ -287,7 +287,10 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
     OSScreenEnableEx(SCREEN_DRC, TRUE);
 
     DrawUtils::initBuffers(screenBuffer, tvBufferSize, screenBuffer + tvBufferSize, drcBufferSize);
-    DrawUtils::initFont();
+
+    if (!DrawUtils::initFont()) {
+        OSFatal("Failed to init font");
+    }
 
     uint32_t selected = autobootIndex > 0 ? autobootIndex : 0;
     int autoBoot      = autobootIndex;
