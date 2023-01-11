@@ -35,7 +35,6 @@ jobs:
       run: |
         echo REPOSITORY_NAME=$(echo "$GITHUB_REPOSITORY" | awk -F / '{print $2}' | sed -e "s/:refs//") >> $GITHUB_ENV
         echo DATETIME=$(echo $(date '+%Y%m%d-%H%M%S')) >> $GITHUB_ENV
-        echo COMMIT_MESSAGES=$(echo "${{join(github.event.commits.*.message, '||END||') }}" |  sed -e 's/||END||/\r\n/g') >> $GITHUB_ENV
     - uses: actions/download-artifact@master
       with:
         name: binary
@@ -43,25 +42,12 @@ jobs:
     - name: zip artifact
       run: zip -r ${{ env.REPOSITORY_NAME }}_${{ env.DATETIME }}.zip wiiu
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: "softprops/action-gh-release@v1"
       with:
         tag_name: ${{ env.REPOSITORY_NAME }}-${{ env.DATETIME }}
-        release_name: Nightly-${{ env.REPOSITORY_NAME }}-${{ env.DATETIME }}
         draft: false
         prerelease: true
-        body: |
-           Not a stable release:
-           ${{ env.COMMIT_MESSAGES }}
-    - name: Upload Release Asset
-      id: upload-release-asset 
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-        asset_path: ./${{ env.REPOSITORY_NAME }}_${{ env.DATETIME }}.zip
-        asset_name: ${{ env.REPOSITORY_NAME }}_${{ env.DATETIME }}.zip
-        asset_content_type: application/zip
+        generate_release_notes: true
+        name: Nightly-${{ env.REPOSITORY_NAME }}-${{ env.DATETIME }}
+        files: |
+          ./${{ env.REPOSITORY_NAME }}_${{ env.DATETIME }}.zip
