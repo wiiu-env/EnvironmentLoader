@@ -23,7 +23,7 @@ bool ElfUtils::doRelocation(const std::vector<std::unique_ptr<RelocationData>> &
         }
 
         uint32_t functionAddress = 0;
-        OSDynLoad_FindExport(rplHandle, isData, functionName.c_str(), (void **) &functionAddress);
+        OSDynLoad_FindExport(rplHandle, (OSDynLoad_ExportType) isData, functionName.c_str(), (void **) &functionAddress);
         if (functionAddress == 0) {
             DEBUG_FUNCTION_LINE_ERR("Failed to find export for %s %s %d", functionName.c_str(), rplName.c_str(), isData);
             return false;
