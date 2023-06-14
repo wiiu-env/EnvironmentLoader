@@ -3,9 +3,19 @@
 #include "schrift.h"
 #include <cstdint>
 
+#define COLOR_WHITE              Color(0xffffffff)
+#define COLOR_BLACK              Color(0, 0, 0, 255)
+#define COLOR_RED                Color(237, 28, 36, 255)
+#define COLOR_BACKGROUND         Color(0, 40, 100, 255)
+#define COLOR_TEXT               COLOR_WHITE
+#define COLOR_TEXT2              Color(0xB3ffffff)
+#define COLOR_AUTOBOOT           Color(0xaeea00ff)
+#define COLOR_BORDER             Color(204, 204, 204, 255)
+#define COLOR_BORDER_HIGHLIGHTED Color(0x3478e4ff)
+
 // visible screen sizes
-#define SCREEN_WIDTH  854
-#define SCREEN_HEIGHT 480
+#define SCREEN_WIDTH             854
+#define SCREEN_HEIGHT            480
 
 union Color {
     explicit Color(uint32_t color) {
