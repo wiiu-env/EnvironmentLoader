@@ -30,6 +30,8 @@
 #include "kernel.h"
 #include "module/ModuleDataFactory.h"
 #include "utils/DrawUtils.h"
+#include "utils/InputUtils.h"
+#include "utils/PairUtils.h"
 
 // clang-format off
 #define MEMORY_REGION_START         0x00A00000
@@ -157,16 +159,11 @@ int main(int argc, char **argv) {
             DEBUG_FUNCTION_LINE_ERR("No config found");
         }
 
-        VPADReadError err;
-        VPADStatus vpad_data;
-        VPADRead(VPAD_CHAN_0, &vpad_data, 1, &err);
+        InputUtils::Init();
 
-        uint32_t btn = 0;
-        if (err == VPAD_READ_SUCCESS) {
-            btn = vpad_data.hold | vpad_data.trigger;
-        }
+        InputUtils::InputData input = InputUtils::getControllerInput();
 
-        if (forceMenu || (btn & VPAD_BUTTON_X) == VPAD_BUTTON_X) {
+        if (forceMenu || ((input.trigger | input.hold) & VPAD_BUTTON_X) == VPAD_BUTTON_X) {
             DEBUG_FUNCTION_LINE_VERBOSE("Open menu!");
             environment_path = EnvironmentSelectionScreen(environmentPaths, autobootIndex);
             if (environmentPaths.empty()) {
@@ -175,6 +172,7 @@ int main(int argc, char **argv) {
                 DEBUG_FUNCTION_LINE_VERBOSE("Selected %s", environment_path.c_str());
             }
         }
+        InputUtils::DeInit();
     }
     RevertMainHook();
 
@@ -258,16 +256,6 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-#define COLOR_WHITE              Color(0xffffffff)
-#define COLOR_BLACK              Color(0, 0, 0, 255)
-#define COLOR_RED                Color(237, 28, 36, 255)
-#define COLOR_BACKGROUND         Color(0, 40, 100, 255)
-#define COLOR_TEXT               COLOR_WHITE
-#define COLOR_TEXT2              Color(0xB3ffffff)
-#define COLOR_AUTOBOOT           Color(0xaeea00ff)
-#define COLOR_BORDER             Color(204, 204, 204, 255)
-#define COLOR_BORDER_HIGHLIGHTED Color(0x3478e4ff)
-
 std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> &payloads, int32_t autobootIndex) {
     OSScreenInit();
 
@@ -295,32 +283,32 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
     uint32_t selected = autobootIndex > 0 ? autobootIndex : 0;
     int autoBoot      = autobootIndex;
 
-    bool redraw = true;
-    while (true) {
-        VPADStatus vpad{};
-        VPADRead(VPAD_CHAN_0, &vpad, 1, nullptr);
-
-        if (vpad.trigger & VPAD_BUTTON_UP) {
-            if (selected > 0) {
-                selected--;
-                redraw = true;
+    {
+        PairMenu pairMenu;
+        while (true) {
+            if (pairMenu.ProcessPairScreen()) {
+                continue;
             }
-        } else if (vpad.trigger & VPAD_BUTTON_DOWN) {
-            if (selected < payloads.size() - 1) {
-                selected++;
-                redraw = true;
-            }
-        } else if (vpad.trigger & VPAD_BUTTON_A) {
-            break;
-        } else if (vpad.trigger & VPAD_BUTTON_X) {
-            autoBoot = -1;
-            redraw   = true;
-        } else if (vpad.trigger & VPAD_BUTTON_Y) {
-            autoBoot = selected;
-            redraw   = true;
-        }
 
-        if (redraw) {
+            InputUtils::InputData input = InputUtils::getControllerInput();
+
+            if (input.trigger & VPAD_BUTTON_UP) {
+                if (selected > 0) {
+                    selected--;
+                }
+            } else if (input.trigger & VPAD_BUTTON_DOWN) {
+                if (selected < payloads.size() - 1) {
+                    selected++;
+                }
+            } else if (input.trigger & VPAD_BUTTON_A) {
+                break;
+            } else if (input.trigger & VPAD_BUTTON_X) {
+                autoBoot = -1;
+            } else if (input.trigger & VPAD_BUTTON_Y) {
+                autoBoot = selected;
+            }
+
+
             DrawUtils::beginDraw();
             DrawUtils::clear(COLOR_BACKGROUND);
 
@@ -368,8 +356,6 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
             }
 
             DrawUtils::endDraw();
-
-            redraw = false;
         }
     }
 
