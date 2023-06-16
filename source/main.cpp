@@ -272,7 +272,7 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
 
     auto *screenBuffer = (uint8_t *) memalign(0x100, tvBufferSize + drcBufferSize);
     if (!screenBuffer) {
-        OSFatal("Fail to allocate screenBuffer");
+        OSFatal("EnvironmentLoader: Fail to allocate screenBuffer");
     }
     memset(screenBuffer, 0, tvBufferSize + drcBufferSize);
 
@@ -285,7 +285,7 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
     DrawUtils::initBuffers(screenBuffer, tvBufferSize, screenBuffer + tvBufferSize, drcBufferSize);
 
     if (!DrawUtils::initFont()) {
-        OSFatal("Failed to init font");
+        OSFatal("EnvironmentLoader: Failed to init font");
     }
 
     uint32_t selected = autobootIndex > 0 ? autobootIndex : 0;

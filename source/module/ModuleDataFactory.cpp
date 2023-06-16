@@ -232,7 +232,7 @@ bool ModuleDataFactory::getImportRelocationData(std::unique_ptr<ModuleData> &mod
                 uint32_t section_index = psec->get_info();
                 if (!infoMap.contains(sym_section_index)) {
                     DEBUG_FUNCTION_LINE_ERR("Relocation is referencing a unknown section. %d destination: %08X sym_name %s", section_index, destinations[section_index], sym_name.c_str());
-                    OSFatal("Relocation is referencing a unknown section.");
+                    OSFatal("EnvironmentLoader: Relocation is referencing a unknown section.");
                 }
 
                 auto relocationData = make_unique_nothrow<RelocationData>(type,
