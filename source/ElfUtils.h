@@ -2,8 +2,10 @@
 
 #include "common/relocation_defines.h"
 #include "module/RelocationData.h"
+#include <coreinit/dynload.h>
 #include <cstdint>
 #include <cstdio>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -50,5 +52,5 @@ public:
                            RelocationType reloc_type);
 
 
-    static bool doRelocation(const std::vector<std::unique_ptr<RelocationData>> &relocData, relocation_trampoline_entry_t *tramp_data, uint32_t tramp_length);
+    static bool doRelocation(const std::vector<std::unique_ptr<RelocationData>> &relocData, relocation_trampoline_entry_t *tramp_data, uint32_t tramp_length, std::map<std::string, OSDynLoad_Module> &usedRPls);
 };
