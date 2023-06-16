@@ -105,7 +105,7 @@ PairMenu::PairMenu() {
     mIMHandle = IM_Open();
     if (mIMHandle < 0) {
         DEBUG_FUNCTION_LINE_ERR("PairMenu: IM_Open failed");
-        OSFatal("PairMenu: IM_Open failed");
+        OSFatal("EnvironmentLoader: PairMenu: IM_Open failed");
     }
     mIMRequest = (IMRequest *) memalign(0x40, sizeof(IMRequest));
 
@@ -114,7 +114,7 @@ PairMenu::PairMenu() {
 
     if (!mIMRequest || !mIMCancelRequest) {
         DEBUG_FUNCTION_LINE_ERR("Failed to allocate im request");
-        OSFatal("PairMenu: Failed to allocate im request");
+        OSFatal("EnvironmentLoader: PairMenu: Failed to allocate im request");
     }
 
     mIMEventMask = IM_EVENT_SYNC;

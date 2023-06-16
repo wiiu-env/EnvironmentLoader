@@ -39,7 +39,7 @@ public:
 
     [[nodiscard]] const char *getRPLName() const {
         if (name.max_size() < strlen("._import_") + 1) {
-            OSFatal("Invalid RPLName, is too short to be valid");
+            OSFatal("EnvironmentLoader: Invalid RPLName, is too short to be valid");
         }
         return name.c_str() + strlen("._import_");
     }
