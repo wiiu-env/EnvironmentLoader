@@ -180,6 +180,7 @@ int main(int argc, char **argv) {
         DirList setupModules(environment_path + "/modules/setup", ".rpx", DirList::Files, 1);
         setupModules.SortList();
 
+        std::map<std::string, OSDynLoad_Module> usedRPls;
         for (int i = 0; i < setupModules.GetFilecount(); i++) {
             //! skip hidden linux and mac files
             if (setupModules.GetFilename(i)[0] == '.' || setupModules.GetFilename(i)[0] == '_') {
@@ -206,7 +207,7 @@ int main(int argc, char **argv) {
                 continue;
             }
             DEBUG_FUNCTION_LINE("Loaded module data");
-            if (!ElfUtils::doRelocation(moduleData.value()->getRelocationDataList(), gModuleData->trampolines, DYN_LINK_TRAMPOLIN_LIST_LENGTH)) {
+            if (!ElfUtils::doRelocation(moduleData.value()->getRelocationDataList(), gModuleData->trampolines, DYN_LINK_TRAMPOLIN_LIST_LENGTH, usedRPls)) {
                 DEBUG_FUNCTION_LINE_ERR("Relocations failed");
                 OSFatal("EnvironmentLoader: Relocations failed");
             } else {
@@ -223,7 +224,14 @@ int main(int argc, char **argv) {
             ((int(*)(int, char **)) moduleData.value()->getEntrypoint())(1, arr);
             // clang-format on
             DEBUG_FUNCTION_LINE("Back from module");
+
+            for (auto &rpl : usedRPls) {
+                DEBUG_FUNCTION_LINE_VERBOSE("Release %s", rpl.first.c_str());
+                OSDynLoad_Release(rpl.second);
+            }
+            usedRPls.clear();
         }
+
     } else {
         DEBUG_FUNCTION_LINE("Return to Wii U Menu");
         ProcUIInit(OSSavesDone_ReadyToRelease);

@@ -3,28 +3,35 @@
 #include <coreinit/cache.h>
 #include <coreinit/debug.h>
 #include <coreinit/dynload.h>
-#include <coreinit/memdefaultheap.h>
 
 #include "ElfUtils.h"
 #include "elfio/elfio.hpp"
 
-bool ElfUtils::doRelocation(const std::vector<std::unique_ptr<RelocationData>> &relocData, relocation_trampoline_entry_t *tramp_data, uint32_t tramp_length) {
+bool ElfUtils::doRelocation(const std::vector<std::unique_ptr<RelocationData>> &relocData, relocation_trampoline_entry_t *tramp_data, uint32_t tramp_length, std::map<std::string, OSDynLoad_Module> &usedRPls) {
     for (auto const &curReloc : relocData) {
         std::string functionName   = curReloc->getName();
         std::string rplName        = curReloc->getImportRPLInformation()->getRPLName();
         int32_t isData             = curReloc->getImportRPLInformation()->isData();
         OSDynLoad_Module rplHandle = nullptr;
 
-
-        auto err = OSDynLoad_IsModuleLoaded(rplName.c_str(), &rplHandle);
-        if (err != OS_DYNLOAD_OK || rplHandle == nullptr) {
-            // only acquire if not already loaded.
-            OSDynLoad_Acquire(rplName.c_str(), &rplHandle);
+        if (!usedRPls.contains(rplName)) {
+            DEBUG_FUNCTION_LINE_VERBOSE("Acquire %s", rplName.c_str());
+            // Always acquire to increase refcount and make sure it won't get unloaded while we're using it.
+            OSDynLoad_Error err = OSDynLoad_Acquire(rplName.c_str(), &rplHandle);
+            if (err != OS_DYNLOAD_OK) {
+                DEBUG_FUNCTION_LINE_ERR("Failed to acquire %s", rplName.c_str());
+                return false;
+            }
+            // Keep track RPLs we are using.
+            // They will be released on exit (See: AromaBaseModule)
+            usedRPls[rplName] = rplHandle;
+        } else {
+            DEBUG_FUNCTION_LINE_VERBOSE("Use from usedRPLs cache! %s", rplName.c_str());
         }
+        rplHandle = usedRPls[rplName];
 
         uint32_t functionAddress = 0;
-        OSDynLoad_FindExport(rplHandle, (OSDynLoad_ExportType) isData, functionName.c_str(), (void **) &functionAddress);
-        if (functionAddress == 0) {
+        if ((OSDynLoad_FindExport(rplHandle, (OSDynLoad_ExportType) isData, functionName.c_str(), (void **) &functionAddress) != OS_DYNLOAD_OK) || functionAddress == 0) {
             DEBUG_FUNCTION_LINE_ERR("Failed to find export for %s %s %d", functionName.c_str(), rplName.c_str(), isData);
             return false;
         }
