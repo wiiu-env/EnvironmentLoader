@@ -310,9 +310,9 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
                 }
             } else if (input.trigger & VPAD_BUTTON_A) {
                 break;
-            } else if (input.trigger & VPAD_BUTTON_X) {
+            } else if (input.trigger & (VPAD_BUTTON_X | VPAD_BUTTON_MINUS)) {
                 autoBoot = -1;
-            } else if (input.trigger & VPAD_BUTTON_Y) {
+            } else if (input.trigger & (VPAD_BUTTON_Y | VPAD_BUTTON_PLUS)) {
                 autoBoot = selected;
             }
 
@@ -357,7 +357,7 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
             if (!payloads.empty()) {
                 DrawUtils::print(16, SCREEN_HEIGHT - 8, "\ue07d Navigate ");
                 DrawUtils::print(SCREEN_WIDTH - 16, SCREEN_HEIGHT - 8, "\ue000 Choose", true);
-                const char *autobootHints = "\ue002 Clear Default / \ue003 Select Default";
+                const char *autobootHints = "\ue002/\ue046 Clear Default / \ue003/\ue045 Select Default";
                 DrawUtils::print(SCREEN_WIDTH / 2 + DrawUtils::getTextWidth(autobootHints) / 2, SCREEN_HEIGHT - 8, autobootHints, true);
             } else {
                 DrawUtils::print(SCREEN_WIDTH - 20, SCREEN_HEIGHT - 8, "\ue000 Wii U Menu", true);
