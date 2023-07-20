@@ -32,6 +32,9 @@
 #include "utils/DrawUtils.h"
 #include "utils/InputUtils.h"
 #include "utils/PairUtils.h"
+#include "version.h"
+
+#define ENVIRONMENT_LOADER_VERSION "v0.1.2"
 
 // clang-format off
 #define MEMORY_REGION_START         0x00A00000
@@ -350,6 +353,8 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
             DrawUtils::setFontSize(24);
             DrawUtils::print(16, 6 + 24, "Environment Loader");
             DrawUtils::drawRectFilled(8, 8 + 24 + 4, SCREEN_WIDTH - 8 * 2, 3, COLOR_WHITE);
+            DrawUtils::setFontSize(16);
+            DrawUtils::print(SCREEN_WIDTH - 16, 6 + 24, ENVIRONMENT_LOADER_VERSION ENVIRONMENT_LOADER_VERSION_EXTRA, true);
 
             // draw bottom bar
             DrawUtils::drawRectFilled(8, SCREEN_HEIGHT - 24 - 8 - 4, SCREEN_WIDTH - 8 * 2, 3, COLOR_WHITE);

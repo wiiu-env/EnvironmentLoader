@@ -18,6 +18,13 @@ jobs:
     needs: clang-format
     steps:
     - uses: actions/checkout@v3
+    - name: create version.h
+      run: |
+        git_hash=$(git rev-parse --short "$GITHUB_SHA")
+        cat <<EOF > ./source/version.h
+        #pragma once
+        #define ENVIRONMENT_LOADER_VERSION_EXTRA " (nightly-$git_hash)"
+        EOF
     - name: build binary
       run: |
         docker build . -t builder
