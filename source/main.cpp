@@ -34,7 +34,7 @@
 #include "utils/PairUtils.h"
 #include "version.h"
 
-#define ENVIRONMENT_LOADER_VERSION "v0.1.2"
+#define ENVIRONMENT_LOADER_VERSION "v0.2.0"
 
 // clang-format off
 #define MEMORY_REGION_START         0x00A00000
