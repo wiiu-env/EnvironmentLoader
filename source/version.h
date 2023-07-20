@@ -1,0 +1,2 @@
+#pragma once
+#define ENVIRONMENT_LOADER_VERSION_EXTRA ""
