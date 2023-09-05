@@ -9,7 +9,7 @@ jobs:
   clang-format:
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: clang-format
       run: |
         docker run --rm -v ${PWD}:/src ghcr.io/wiiu-env/clang-format:13.0.0-2 -r ./source --exclude ./source/elfio
@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: clang-format
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: create version.h
       run: |
         git_hash=$(git rev-parse --short "$GITHUB_SHA")
