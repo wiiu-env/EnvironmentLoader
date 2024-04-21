@@ -366,6 +366,7 @@ void LoadAndRunModule(std::string_view filepath, std::string_view environment_pa
 
         auto moduleInfo    = std::move(*moduleInfoOpt);
         auto moduleInfoPtr = (module_information_t *) moduleInfo.data();
+        *moduleInfoPtr     = {};
 
         // Frees automatically, must not survive the heapWrapper.
         auto moduleData = ModuleDataFactory::load(reader, *heapWrapperOpt, moduleInfoPtr->trampolines, sizeof(moduleInfoPtr->trampolines) / sizeof(moduleInfoPtr->trampolines[0]));
