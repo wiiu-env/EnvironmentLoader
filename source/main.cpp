@@ -30,19 +30,18 @@
 #include "kernel.h"
 #include "module/ModuleDataFactory.h"
 #include "utils/DrawUtils.h"
+#include "utils/FileUtils.h"
 #include "utils/InputUtils.h"
+#include "utils/OnLeavingScope.h"
 #include "utils/PairUtils.h"
+#include "utils/utils.h"
+#include "utils/wiiu_zlib.hpp"
 #include "version.h"
 
 #define ENVIRONMENT_LOADER_VERSION "v0.2.0"
 
-// clang-format off
-#define MEMORY_REGION_START         0x00A00000
-#define MEMORY_REGION_SIZE          0x00600000
-#define MEMORY_REGION_END           (MEMORY_REGION_START + MEMORY_REGION_SIZE)
-
-#define AUTOBOOT_CONFIG_PATH        "fs:/vol/external01/wiiu/environments/default.cfg"
-// clang-format on
+#define MEMORY_REGION_START        0x00800000
+#define AUTOBOOT_CONFIG_PATH       "fs:/vol/external01/wiiu/environments/default.cfg"
 
 bool CheckRunning() {
     switch (ProcUIProcessMessages(true)) {
@@ -95,6 +94,7 @@ bool writeFileContent(const std::string &path, const std::string &content) {
 
 extern "C" void __fini();
 extern "C" void __init_wut_malloc();
+void LoadAndRunModule(std::string_view filepath, std::string_view environment_path);
 
 int main(int argc, char **argv) {
     // We need to call __init_wut_malloc somewhere so wut_malloc will be used for the memory allocation.
@@ -113,28 +113,21 @@ int main(int argc, char **argv) {
 
     DEBUG_FUNCTION_LINE("Hello from EnvironmentLoader!");
 
-    char environmentPath[0x100];
-    memset(environmentPath, 0, sizeof(environmentPath));
-
-    auto handle = IOS_Open("/dev/mcp", IOS_OPEN_READ);
+    char environmentPathFromIOSU[0x100] = {};
+    auto handle                         = IOS_Open("/dev/mcp", IOS_OPEN_READ);
     if (handle >= 0) {
         int in = 0xF9; // IPC_CUSTOM_COPY_ENVIRONMENT_PATH
-        if (IOS_Ioctl(handle, 100, &in, sizeof(in), environmentPath, sizeof(environmentPath)) == IOS_ERROR_OK) {
-            DEBUG_FUNCTION_LINE("Boot into %s", environmentPath);
+        if (IOS_Ioctl(handle, 100, &in, sizeof(in), environmentPathFromIOSU, sizeof(environmentPathFromIOSU)) == IOS_ERROR_OK) {
+            DEBUG_FUNCTION_LINE("Boot into %s", environmentPathFromIOSU);
         }
 
         IOS_Close(handle);
     }
 
-    // We substract 0x100 to be safe.
-    uint32_t textSectionStart = textStart() - 0x100;
-
-    auto gModuleData = (module_information_t *) (textSectionStart - sizeof(module_information_t));
-
     bool noEnvironmentsFound = false;
 
-    std::string environment_path = std::string(environmentPath);
-    if (strncmp(environmentPath, "fs:/vol/external01/wiiu/environments/", strlen("fs:/vol/external01/wiiu/environments/")) != 0) {
+    std::string environmentPath = std::string(environmentPathFromIOSU);
+    if (!environmentPath.starts_with("fs:/vol/external01/wiiu/environments/")) { // If the environment path in IOSU is empty or unexpected, read config
         DirList environmentDirs("fs:/vol/external01/wiiu/environments/", nullptr, DirList::Dirs, 1);
 
         std::map<std::string, std::string> environmentPaths;
@@ -151,9 +144,9 @@ int main(int argc, char **argv) {
             for (auto const &[key, val] : environmentPaths) {
                 if (res.value() == key) {
                     DEBUG_FUNCTION_LINE("Found environment %s from config at index %d", res.value().c_str(), i);
-                    autobootIndex    = i;
-                    environment_path = val;
-                    forceMenu        = false;
+                    autobootIndex   = i;
+                    environmentPath = val;
+                    forceMenu       = false;
                     break;
                 }
                 i++;
@@ -168,11 +161,11 @@ int main(int argc, char **argv) {
 
         if (forceMenu || ((input.trigger | input.hold) & VPAD_BUTTON_X) == VPAD_BUTTON_X) {
             DEBUG_FUNCTION_LINE_VERBOSE("Open menu!");
-            environment_path = EnvironmentSelectionScreen(environmentPaths, autobootIndex);
+            environmentPath = EnvironmentSelectionScreen(environmentPaths, autobootIndex);
             if (environmentPaths.empty()) {
                 noEnvironmentsFound = true;
             } else {
-                DEBUG_FUNCTION_LINE_VERBOSE("Selected %s", environment_path.c_str());
+                DEBUG_FUNCTION_LINE_VERBOSE("Selected %s", environmentPath.c_str());
             }
         }
         InputUtils::DeInit();
@@ -180,10 +173,9 @@ int main(int argc, char **argv) {
     RevertMainHook();
 
     if (!noEnvironmentsFound) {
-        DirList setupModules(environment_path + "/modules/setup", ".rpx", DirList::Files, 1);
+        DirList setupModules(environmentPath + "/modules/setup", ".rpx", DirList::Files, 1);
         setupModules.SortList();
 
-        std::map<std::string, OSDynLoad_Module> usedRPls;
         for (int i = 0; i < setupModules.GetFilecount(); i++) {
             //! skip hidden linux and mac files
             if (setupModules.GetFilename(i)[0] == '.' || setupModules.GetFilename(i)[0] == '_') {
@@ -191,48 +183,7 @@ int main(int argc, char **argv) {
                 continue;
             }
 
-            // Some module may unmount the sd card on exit.
-            FSAInit();
-            auto client = FSAAddClient(nullptr);
-            if (client) {
-                FSAMount(client, "/dev/sdcard01", "/vol/external01", static_cast<FSAMountFlags>(0), nullptr, 0);
-                FSADelClient(client);
-            }
-
-            uint32_t destination_address_end = ((uint32_t) gModuleData) & 0xFFFF0000;
-            memset((void *) gModuleData, 0, sizeof(module_information_t));
-            DEBUG_FUNCTION_LINE("Trying to run %s.", setupModules.GetFilepath(i), destination_address_end, ((uint32_t) gModuleData) - MEMORY_REGION_START);
-            auto moduleData = ModuleDataFactory::load(setupModules.GetFilepath(i), destination_address_end, ((uint32_t) gModuleData) - MEMORY_REGION_START, gModuleData->trampolines,
-                                                      DYN_LINK_TRAMPOLIN_LIST_LENGTH);
-            if (!moduleData) {
-                DEBUG_FUNCTION_LINE_ERR("Failed to load %s", setupModules.GetFilepath(i));
-                OSFatal("EnvironmentLoader: Failed to load module");
-                continue;
-            }
-            DEBUG_FUNCTION_LINE("Loaded module data");
-            if (!ElfUtils::doRelocation(moduleData.value()->getRelocationDataList(), gModuleData->trampolines, DYN_LINK_TRAMPOLIN_LIST_LENGTH, usedRPls)) {
-                DEBUG_FUNCTION_LINE_ERR("Relocations failed");
-                OSFatal("EnvironmentLoader: Relocations failed");
-            } else {
-                DEBUG_FUNCTION_LINE("Relocation done");
-            }
-
-            DCFlushRange((void *) moduleData.value()->getStartAddress(), moduleData.value()->getEndAddress() - moduleData.value()->getStartAddress());
-            ICInvalidateRange((void *) moduleData.value()->getStartAddress(), moduleData.value()->getEndAddress() - moduleData.value()->getStartAddress());
-
-            DEBUG_FUNCTION_LINE("Calling entrypoint @%08X", moduleData.value()->getEntrypoint());
-            char *arr[1];
-            arr[0] = (char *) environment_path.c_str();
-            // clang-format off
-            ((int(*)(int, char **)) moduleData.value()->getEntrypoint())(1, arr);
-            // clang-format on
-            DEBUG_FUNCTION_LINE("Back from module");
-
-            for (auto &rpl : usedRPls) {
-                DEBUG_FUNCTION_LINE_VERBOSE("Release %s", rpl.first.c_str());
-                OSDynLoad_Release(rpl.second);
-            }
-            usedRPls.clear();
+            LoadAndRunModule(setupModules.GetFilepath(i), environmentPath);
         }
 
     } else {
@@ -265,6 +216,211 @@ int main(int argc, char **argv) {
     deinitLogging();
     __fini();
     return 0;
+}
+
+std::optional<HeapWrapper> GetHeapFromMappedMemory(uint32_t heapSize) {
+    void *(*MEMAllocFromDefaultHeapExForThreads)(uint32_t size, int align) = nullptr;
+    void (*MEMFreeToDefaultHeapForThreads)(void *ptr)                      = nullptr;
+
+    // Let's try to get the memalign and free functions from the memorymapping module.
+    OSDynLoad_Module module;
+    if (OSDynLoad_Acquire("homebrew_memorymapping", &module) != OS_DYNLOAD_OK) {
+        DEBUG_FUNCTION_LINE("Failed to acquire homebrew_memorymapping.");
+        return {};
+    }
+    /* Memory allocation functions */
+    uint32_t *allocPtr = nullptr, *freePtr = nullptr;
+    if (OSDynLoad_FindExport(module, OS_DYNLOAD_EXPORT_DATA, "MEMAllocFromMappedMemoryEx", reinterpret_cast<void **>(&allocPtr)) != OS_DYNLOAD_OK) {
+        DEBUG_FUNCTION_LINE("OSDynLoad_FindExport for MEMAllocFromDefaultHeapEx failed");
+        return {};
+    }
+    if (OSDynLoad_FindExport(module, OS_DYNLOAD_EXPORT_DATA, "MEMFreeToMappedMemory", reinterpret_cast<void **>(&freePtr)) != OS_DYNLOAD_OK) {
+        DEBUG_FUNCTION_LINE("OSDynLoad_FindExport for MEMFreeToDefaultHeap failed");
+        return {};
+    }
+
+    MEMAllocFromDefaultHeapExForThreads = (void *(*) (uint32_t, int) ) * allocPtr;
+    MEMFreeToDefaultHeapForThreads      = (void (*)(void *)) * freePtr;
+
+    if (!MEMAllocFromDefaultHeapExForThreads || !MEMFreeToDefaultHeapForThreads) {
+        DEBUG_FUNCTION_LINE_ERR("MEMAllocFromDefaultHeapExForThreads or MEMFreeToDefaultHeapForThreads is null");
+        // the mapped memory is not available (yet)
+        return {};
+    }
+
+    uint32_t size = heapSize;
+    auto ptr      = MEMAllocFromDefaultHeapExForThreads(size, 0x4);
+    if (!ptr) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to alloc memory: %d bytes", size);
+        return {};
+    }
+
+    DEBUG_FUNCTION_LINE("Let's create a memory wrapper for 0x%08X, size: %d", ptr, size);
+    return HeapWrapper(MemoryWrapper(ptr, size, MEMFreeToDefaultHeapForThreads));
+}
+
+std::optional<HeapWrapper> GetHeapForModule(uint32_t heapSize) {
+    // If Aroma is already loaded, we can't use the region between MEMORY_REGION_START and MEMORY_REGION_END anymore because Aroma is using.
+    // So instead we check before loading a module if aromas memory mapping module is already usable. If yes, we use this to load the module instead
+    if (auto heapWrapper = GetHeapFromMappedMemory(heapSize)) {
+        return heapWrapper;
+    }
+
+    // If Aroma is not already loaded, we use the existing 0x00800000 - 0x01000000 memory region. This is where aroma is loaded to. Note: this region may be only mapped to the main core.
+    // The environment loader is loaded to the end of 0x00800000 - 0x01000000 memory region. With this helper we know the start of the .text section
+    uint32_t textSectionStart = textStart() - 0x100;
+
+    auto endOfUsableMemory = textSectionStart;
+    uint32_t startAddress  = ((uint32_t) endOfUsableMemory - heapSize) & 0xFFFF0000;
+    uint32_t size          = endOfUsableMemory - startAddress;
+
+    if (startAddress < MEMORY_REGION_START) {
+        DEBUG_FUNCTION_LINE_ERR("Not enough static memory");
+        return {};
+    }
+
+    DEBUG_FUNCTION_LINE("Let's create a memory wrapper for 0x%08X, size: %d", ptr, size);
+    auto res = HeapWrapper(MemoryWrapper((void *) startAddress, size, /* we don't need to free this memory*/ nullptr));
+    if ((uint32_t) res.GetHeapHandle() != startAddress) {
+        OSFatal("EnvironmentLoader: Unexpected address");
+    }
+    return res;
+}
+
+void SetupKernelModule() {
+    void *(*KernelSetupDefaultSyscalls)() = nullptr;
+
+    OSDynLoad_Module module;
+    if (OSDynLoad_Acquire("homebrew_kernel", &module) != OS_DYNLOAD_OK) {
+        DEBUG_FUNCTION_LINE("Failed to acquire homebrew_kernel.");
+        return;
+    }
+
+    if (OSDynLoad_FindExport(module, OS_DYNLOAD_EXPORT_FUNC, "KernelSetupDefaultSyscalls", reinterpret_cast<void **>(&KernelSetupDefaultSyscalls)) != OS_DYNLOAD_OK) {
+        DEBUG_FUNCTION_LINE("OSDynLoad_FindExport for KernelSetupDefaultSyscalls failed");
+        OSFatal("EnvironmentLoader: KernelModule is missing the export\n"
+                "\"KernelSetupDefaultSyscalls\"... Please update Aroma!\n"
+                "\n"
+                "See https://wiiu.hacks.guide/ for more information.");
+        return;
+    }
+
+    if (!KernelSetupDefaultSyscalls) {
+        DEBUG_FUNCTION_LINE_WARN("KernelSetupDefaultSyscalls is null");
+        OSFatal("EnvironmentLoader: KernelModule is missing the export\n"
+                "\"KernelSetupDefaultSyscalls\"... Please update Aroma!\n"
+                "\n"
+                "See https://wiiu.hacks.guide/ for more information.");
+        return;
+    }
+
+    DEBUG_FUNCTION_LINE("Call KernelSetupDefaultSyscalls");
+    KernelSetupDefaultSyscalls();
+    OSDynLoad_Release(module);
+}
+
+void LoadAndRunModule(std::string_view filepath, std::string_view environment_path) {
+    // Some module may unmount the sd card on exit.
+    FSAInit();
+    auto client = FSAAddClient(nullptr);
+    if (client) {
+        FSAMount(client, "/dev/sdcard01", "/vol/external01", static_cast<FSAMountFlags>(0), nullptr, 0);
+        FSADelClient(client);
+    } else {
+        DEBUG_FUNCTION_LINE_ERR("Failed to add FSA client");
+    }
+
+    DEBUG_FUNCTION_LINE("Trying to load %s into memory", filepath.data());
+    uint8_t *buffer = nullptr;
+    uint32_t fsize  = 0;
+    if (LoadFileToMem(filepath.data(), &buffer, &fsize) < 0) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to load file");
+        OSFatal("EnvironmentLoader: Failed to load file to memory");
+        return;
+    }
+
+    auto cleanupBuffer = onLeavingScope([buffer]() { free(buffer); });
+
+    ELFIO::elfio reader(new wiiu_zlib);
+    // Load ELF data
+    if (!reader.load(reinterpret_cast<const char *>(buffer), fsize)) {
+        DEBUG_FUNCTION_LINE_ERR("Can't parse .wms from buffer.");
+        OSFatal("Can't parse .wms from buffer.");
+        return;
+    }
+
+    uint32_t moduleSize = ModuleDataFactory::GetSizeOfModule(reader);
+    DEBUG_FUNCTION_LINE_VERBOSE("Module has size: %d", moduleSize);
+
+    uint32_t requiredHeapSize = moduleSize + sizeof(module_information_t) + 0x10000; // add another 0x10000 to be safe
+    DEBUG_FUNCTION_LINE_VERBOSE("Allocate %d bytes for heap (%.2f KiB)", requiredHeapSize, requiredHeapSize / 1024.0f);
+
+    if (auto heapWrapperOpt = GetHeapForModule(requiredHeapSize); heapWrapperOpt.has_value()) {
+        // Frees automatically, must not survive the heapWrapper.
+        auto moduleInfoOpt = heapWrapperOpt->Alloc(sizeof(module_information_t), 0x4);
+        if (!moduleInfoOpt) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to alloc module information");
+            OSFatal("EnvironmentLoader: Failed to alloc module information");
+            return;
+        }
+
+        auto moduleInfo    = std::move(*moduleInfoOpt);
+        auto moduleInfoPtr = (module_information_t *) moduleInfo.data();
+
+        // Frees automatically, must not survive the heapWrapper.
+        auto moduleData = ModuleDataFactory::load(reader, *heapWrapperOpt, moduleInfoPtr->trampolines, sizeof(moduleInfoPtr->trampolines) / sizeof(moduleInfoPtr->trampolines[0]));
+        if (!moduleData) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to load %s", filepath);
+            OSFatal("EnvironmentLoader: Failed to load module");
+            return;
+        }
+
+        DEBUG_FUNCTION_LINE("Loaded module data");
+        std::map<std::string, OSDynLoad_Module> usedRPls;
+        if (!ElfUtils::doRelocation(moduleData.value()->getRelocationDataList(), moduleInfoPtr->trampolines, sizeof(moduleInfoPtr->trampolines) / sizeof(moduleInfoPtr->trampolines[0]), usedRPls)) {
+            DEBUG_FUNCTION_LINE_ERR("Relocations failed");
+            OSFatal("EnvironmentLoader: Relocations failed");
+        } else {
+            DEBUG_FUNCTION_LINE("Relocation done");
+        }
+
+        DCFlushRange((void *) moduleData.value()->getStartAddress(), moduleData.value()->getEndAddress() - moduleData.value()->getStartAddress());
+        ICInvalidateRange((void *) moduleData.value()->getStartAddress(), moduleData.value()->getEndAddress() - moduleData.value()->getStartAddress());
+
+        char *arr[4];
+        arr[0] = (char *) environment_path.data();
+        arr[1] = (char *) "EnvironmentLoader"; //
+        arr[2] = (char *) 0x02;                // Version
+        /*
+         * This is a hacky work around to tell Aromas Module Loader which memory region it can use safely. After using it, it's expected to expose new memory region via the
+         * custom rpl "homebrew_mappedmemory" (See: GetHeapFromMappedMemory). The returned memory is expected to be RWX for user and kernel.
+         * Once a custom memory allocator is provided, usable_mem_start and usable_mem_end are set to 0.
+         */
+        auto usable_mem_end = (uint32_t) heapWrapperOpt->GetHeapHandle();
+        if (heapWrapperOpt->IsAllocated()) { // Check if you use memory which is actually allocated. This means we can't give it to the module.
+            DEBUG_FUNCTION_LINE("Don't give the module a usable memory region because it will be loaded on a custom memory region.");
+            usable_mem_end = 0;
+        }
+        arr[3] = (char *) usable_mem_end; // End of usable memory
+
+        DEBUG_FUNCTION_LINE("Calling entrypoint @%08X with: \"%s\", \"%s\", %08X, %08X", moduleData.value()->getEntrypoint(), arr[0], arr[1], arr[2], arr[3]);
+        // clang-format off
+        ((int(*)(int, char **)) moduleData.value()->getEntrypoint())(sizeof(arr)/ sizeof(arr[0]), arr);
+        // clang-format on
+        DEBUG_FUNCTION_LINE("Back from module");
+
+        for (auto &rpl : usedRPls) {
+            DEBUG_FUNCTION_LINE_VERBOSE("Release %s", rpl.first.c_str());
+            OSDynLoad_Release(rpl.second);
+        }
+
+    } else {
+        DEBUG_FUNCTION_LINE_ERR("Failed to create heap");
+        OSFatal("EnvironmentLoader: Failed to create heap");
+    }
+
+    // module may override the syscalls used by the Aroma KernelModule. This (tries to) re-init(s) the KernelModule after a setup module has been run.
+    SetupKernelModule();
 }
 
 std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> &payloads, int32_t autobootIndex) {

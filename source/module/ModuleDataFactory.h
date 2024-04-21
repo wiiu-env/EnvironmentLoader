@@ -20,17 +20,20 @@
 #include "../common/relocation_defines.h"
 #include "ModuleData.h"
 #include "elfio/elfio.hpp"
+#include "utils/MemoryUtils.h"
+#include "utils/utils.h"
 #include <map>
 #include <string>
 #include <vector>
 
 class ModuleDataFactory {
 public:
-    static std::optional<std::unique_ptr<ModuleData>>
-    load(const std::string &path, uint32_t destination_address_end, uint32_t maximum_size, relocation_trampoline_entry_t *trampoline_data, uint32_t trampoline_data_length);
+    static uint32_t GetSizeOfModule(const ELFIO::elfio &reader);
 
-    static bool linkSection(ELFIO::elfio &reader, uint32_t section_index, uint32_t destination, uint32_t base_text, uint32_t base_data, relocation_trampoline_entry_t *trampoline_data,
+    static std::optional<std::unique_ptr<ModuleData>> load(const ELFIO::elfio &reader, const HeapWrapper &heapWrapper, relocation_trampoline_entry_t *trampoline_data, uint32_t trampoline_data_length);
+
+    static bool linkSection(const ELFIO::elfio &reader, uint32_t section_index, uint32_t destination, uint32_t base_text, uint32_t base_data, relocation_trampoline_entry_t *trampoline_data,
                             uint32_t trampoline_data_length);
 
-    static bool getImportRelocationData(std::unique_ptr<ModuleData> &moduleData, ELFIO::elfio &reader, uint8_t **destinations);
+    static bool getImportRelocationData(std::unique_ptr<ModuleData> &moduleData, const ELFIO::elfio &reader, uint8_t **destinations);
 };
