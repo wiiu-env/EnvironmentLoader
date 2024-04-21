@@ -279,7 +279,7 @@ std::optional<HeapWrapper> GetHeapForModule(uint32_t heapSize) {
         return {};
     }
 
-    DEBUG_FUNCTION_LINE("Let's create a memory wrapper for 0x%08X, size: %d", ptr, size);
+    DEBUG_FUNCTION_LINE("Let's create a memory wrapper for 0x%08X, size: %d", startAddress, size);
     auto res = HeapWrapper(MemoryWrapper((void *) startAddress, size, /* we don't need to free this memory*/ nullptr));
     if ((uint32_t) res.GetHeapHandle() != startAddress) {
         OSFatal("EnvironmentLoader: Unexpected address");
