@@ -24,41 +24,10 @@
 #include <coreinit/cache.h>
 #include <map>
 #include <string>
-#include <vector>
 
-std::optional<std::unique_ptr<ModuleData>>
-ModuleDataFactory::load(const std::string &path, uint32_t destination_address_end, uint32_t maximum_size, relocation_trampoline_entry_t *trampoline_data, uint32_t trampoline_data_length) {
-    ELFIO::elfio reader(new wiiu_zlib);
-    auto moduleData = make_unique_nothrow<ModuleData>();
-    if (!moduleData) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to allocate ModuleData");
-        return {};
-    }
 
-    uint8_t *buffer = nullptr;
-    uint32_t fsize  = 0;
-    if (LoadFileToMem(path.c_str(), &buffer, &fsize) < 0) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to load file");
-        return {};
-    }
-
-    // Load ELF data
-    if (!reader.load(reinterpret_cast<char *>(buffer), fsize)) {
-        DEBUG_FUNCTION_LINE_ERR("Can't find or process %s", path.c_str());
-        free(buffer);
-        return {};
-    }
-
-    auto cleanupBuffer = onLeavingScope([buffer]() { free(buffer); });
-
-    uint32_t sec_num = reader.sections.size();
-
-    auto destinations = make_unique_nothrow<uint8_t *[]>(sec_num);
-    if (!destinations) {
-        DEBUG_FUNCTION_LINE_ERR("Failed alloc memory for destinations array");
-        return {};
-    }
-
+uint32_t ModuleDataFactory::GetSizeOfModule(const ELFIO::elfio &reader) {
+    uint32_t sec_num      = reader.sections.size();
     uint32_t sizeOfModule = 0;
     for (uint32_t i = 0; i < sec_num; ++i) {
         ELFIO::section *psec = reader.sections[i];
@@ -70,13 +39,36 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
             sizeOfModule += psec->get_size() + 1;
         }
     }
+    return sizeOfModule;
+}
 
-    if (sizeOfModule > maximum_size) {
-        DEBUG_FUNCTION_LINE_ERR("Module is too big.");
+std::optional<std::unique_ptr<ModuleData>>
+ModuleDataFactory::load(const ELFIO::elfio &reader, const HeapWrapper &heapWrapper, relocation_trampoline_entry_t *trampoline_data, uint32_t trampoline_data_length) {
+    auto moduleData = make_unique_nothrow<ModuleData>();
+    if (!moduleData) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to allocate ModuleData");
         return {};
     }
 
-    uint32_t baseOffset   = (destination_address_end - sizeOfModule) & 0xFFFFFF00;
+    uint32_t sec_num = reader.sections.size();
+
+    auto destinations = make_unique_nothrow<uint8_t *[]>(sec_num);
+    if (!destinations) {
+        DEBUG_FUNCTION_LINE_ERR("Failed alloc memory for destinations array");
+        return {};
+    }
+
+    uint32_t sizeOfModule = GetSizeOfModule(reader);
+
+    auto moduleDataOpt = heapWrapper.Alloc(sizeOfModule, 0x100);
+    if (!moduleData) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to allocate memory for module");
+        return {};
+    }
+    ExpHeapMemory moduleMemory = std::move(*moduleDataOpt);
+
+    uint32_t dataPtr      = (uint32_t) ((void *) moduleMemory);
+    uint32_t baseOffset   = dataPtr;
     uint32_t startAddress = baseOffset;
 
     uint32_t offset_text = baseOffset;
@@ -97,7 +89,7 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
             uint32_t sectionSize = psec->get_size();
 
             totalSize += sectionSize;
-            if (totalSize > maximum_size) {
+            if (totalSize > sizeOfModule) {
                 DEBUG_FUNCTION_LINE_ERR("Couldn't load setup module because it's too big.");
                 return {};
             }
@@ -125,8 +117,12 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
 
             const char *p = reader.sections[i]->get_data();
 
-            if (destination + sectionSize > (uint32_t) destination_address_end) {
-                DEBUG_FUNCTION_LINE_ERR("Tried to overflow buffer. %08X > %08X", destination + sectionSize, destination_address_end);
+            if (destination < dataPtr) {
+                DEBUG_FUNCTION_LINE_ERR("Tried to underflow buffer. %08X < %08X", destination, dataPtr);
+                OSFatal("EnvironmentLoader: Tried to underflow buffer");
+            }
+            if (destination + sectionSize > (uint32_t) dataPtr + sizeOfModule) {
+                DEBUG_FUNCTION_LINE_ERR("Tried to overflow buffer. %08X > %08X", destination + sectionSize, dataPtr + sizeOfModule);
                 OSFatal("EnvironmentLoader: Tried to overflow buffer");
             }
 
@@ -165,18 +161,20 @@ ModuleDataFactory::load(const std::string &path, uint32_t destination_address_en
     }
     getImportRelocationData(moduleData, reader, destinations.get());
 
-    DCFlushRange((void *) baseOffset, totalSize);
-    ICInvalidateRange((void *) baseOffset, totalSize);
+    DCFlushRange((void *) dataPtr, totalSize);
+    ICInvalidateRange((void *) dataPtr, totalSize);
 
     moduleData->setStartAddress(startAddress);
     moduleData->setEndAddress(endAddress);
     moduleData->setEntrypoint(entrypoint);
+    moduleData->setMemory(std::move(moduleMemory));
+
     DEBUG_FUNCTION_LINE("Saved entrypoint as %08X", entrypoint);
 
     return moduleData;
 }
 
-bool ModuleDataFactory::getImportRelocationData(std::unique_ptr<ModuleData> &moduleData, ELFIO::elfio &reader, uint8_t **destinations) {
+bool ModuleDataFactory::getImportRelocationData(std::unique_ptr<ModuleData> &moduleData, const ELFIO::elfio &reader, uint8_t **destinations) {
     std::map<uint32_t, std::shared_ptr<ImportRPLInformation>> infoMap;
 
     uint32_t sec_num = reader.sections.size();
@@ -254,7 +252,7 @@ bool ModuleDataFactory::getImportRelocationData(std::unique_ptr<ModuleData> &mod
     return true;
 }
 
-bool ModuleDataFactory::linkSection(ELFIO::elfio &reader, uint32_t section_index, uint32_t destination, uint32_t base_text, uint32_t base_data, relocation_trampoline_entry_t *trampoline_data,
+bool ModuleDataFactory::linkSection(const ELFIO::elfio &reader, uint32_t section_index, uint32_t destination, uint32_t base_text, uint32_t base_data, relocation_trampoline_entry_t *trampoline_data,
                                     uint32_t trampoline_data_length) {
     uint32_t sec_num = reader.sections.size();
 

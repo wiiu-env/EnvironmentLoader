@@ -18,6 +18,7 @@
 #pragma once
 
 #include "RelocationData.h"
+#include "utils/MemoryUtils.h"
 #include <map>
 #include <set>
 #include <string>
@@ -61,9 +62,14 @@ public:
         return endAddress;
     }
 
+    void setMemory(ExpHeapMemory &&memory) {
+        mMemory = std::move(memory);
+    }
+
 private:
     std::vector<std::unique_ptr<RelocationData>> relocation_data_list;
     uint32_t entrypoint   = 0;
     uint32_t startAddress = 0;
     uint32_t endAddress   = 0;
+    ExpHeapMemory mMemory;
 };
