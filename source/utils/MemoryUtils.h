@@ -14,7 +14,6 @@ public:
     }
     ~MemoryWrapper() {
         if (mPtr && mFreeFn) {
-            DEBUG_FUNCTION_LINE_ERR("Free memory wrapper for %08X %d", mPtr, mSize);
             memset(mPtr, 0, mSize);
             mFreeFn(mPtr);
         }
