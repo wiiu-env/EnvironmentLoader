@@ -34,11 +34,11 @@ public:
         this->entrypoint = address;
     }
 
-    void addRelocationData(std::unique_ptr<RelocationData> relocation_data) {
+    void addRelocationData(RelocationData relocation_data) {
         relocation_data_list.push_back(std::move(relocation_data));
     }
 
-    [[nodiscard]] const std::vector<std::unique_ptr<RelocationData>> &getRelocationDataList() const {
+    [[nodiscard]] const std::vector<RelocationData> &getRelocationDataList() const {
         return relocation_data_list;
     }
 
@@ -46,30 +46,16 @@ public:
         return entrypoint;
     }
 
-    void setStartAddress(uint32_t address) {
-        this->startAddress = address;
+    void setTextMemory(ExpHeapMemory &&memory) {
+        mTextMemory = std::move(memory);
     }
-
-    void setEndAddress(uint32_t address) {
-        this->endAddress = address;
-    }
-
-    [[nodiscard]] uint32_t getStartAddress() const {
-        return startAddress;
-    }
-
-    [[nodiscard]] uint32_t getEndAddress() const {
-        return endAddress;
-    }
-
-    void setMemory(ExpHeapMemory &&memory) {
-        mMemory = std::move(memory);
+    void setDataMemory(ExpHeapMemory &&memory) {
+        mDataMemory = std::move(memory);
     }
 
 private:
-    std::vector<std::unique_ptr<RelocationData>> relocation_data_list;
-    uint32_t entrypoint   = 0;
-    uint32_t startAddress = 0;
-    uint32_t endAddress   = 0;
-    ExpHeapMemory mMemory;
+    std::vector<RelocationData> relocation_data_list;
+    uint32_t entrypoint = 0;
+    ExpHeapMemory mTextMemory;
+    ExpHeapMemory mDataMemory;
 };

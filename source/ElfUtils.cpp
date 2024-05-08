@@ -7,11 +7,11 @@
 #include "ElfUtils.h"
 #include "elfio/elfio.hpp"
 
-bool ElfUtils::doRelocation(const std::vector<std::unique_ptr<RelocationData>> &relocData, relocation_trampoline_entry_t *tramp_data, uint32_t tramp_length, std::map<std::string, OSDynLoad_Module> &usedRPls) {
+bool ElfUtils::doRelocation(const std::vector<RelocationData> &relocData, relocation_trampoline_entry_t *tramp_data, uint32_t tramp_length, std::map<std::string, OSDynLoad_Module> &usedRPls) {
     for (auto const &curReloc : relocData) {
-        std::string functionName   = curReloc->getName();
-        std::string rplName        = curReloc->getImportRPLInformation()->getRPLName();
-        int32_t isData             = curReloc->getImportRPLInformation()->isData();
+        std::string functionName   = curReloc.getName();
+        std::string rplName        = curReloc.getImportRPLInformation()->getRPLName();
+        int32_t isData             = curReloc.getImportRPLInformation()->isData();
         OSDynLoad_Module rplHandle = nullptr;
 
         if (!usedRPls.contains(rplName)) {
@@ -35,7 +35,7 @@ bool ElfUtils::doRelocation(const std::vector<std::unique_ptr<RelocationData>> &
             DEBUG_FUNCTION_LINE_ERR("Failed to find export for %s %s %d", functionName.c_str(), rplName.c_str(), isData);
             return false;
         }
-        if (!ElfUtils::elfLinkOne(curReloc->getType(), curReloc->getOffset(), curReloc->getAddend(), (uint32_t) curReloc->getDestination(), functionAddress, tramp_data, tramp_length,
+        if (!ElfUtils::elfLinkOne(curReloc.getType(), curReloc.getOffset(), curReloc.getAddend(), (uint32_t) curReloc.getDestination(), functionAddress, tramp_data, tramp_length,
                                   RELOC_TYPE_IMPORT)) {
             DEBUG_FUNCTION_LINE_ERR("Relocation failed\n");
             return false;
@@ -159,7 +159,6 @@ bool ElfUtils::elfLinkOne(char type, size_t offset, int32_t addend, uint32_t des
                     freeSlot->trampoline[1] = 0x616B0000 | (((uint32_t) value) & 0x0000ffff);         // ori r11, r11, real_addr@l
                     freeSlot->trampoline[2] = 0x7D6903A6;                                             // mtctr   r11
                     freeSlot->trampoline[3] = 0x4E800420;                                             // bctr
-                    DCFlushRange((void *) freeSlot->trampoline, sizeof(freeSlot->trampoline));
                     ICInvalidateRange((unsigned char *) freeSlot->trampoline, sizeof(freeSlot->trampoline));
 
                     if (reloc_type == RELOC_TYPE_FIXED) {

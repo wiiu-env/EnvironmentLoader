@@ -31,12 +31,12 @@ uint32_t ModuleDataFactory::GetSizeOfModule(const ELFIO::elfio &reader) {
     uint32_t sizeOfModule = 0;
     for (uint32_t i = 0; i < sec_num; ++i) {
         ELFIO::section *psec = reader.sections[i];
-        if (psec->get_type() == 0x80000002) {
+        if (psec->get_type() == 0x80000002 || psec->get_name() == ".wut_load_bounds") {
             continue;
         }
 
         if ((psec->get_type() == ELFIO::SHT_PROGBITS || psec->get_type() == ELFIO::SHT_NOBITS) && (psec->get_flags() & ELFIO::SHF_ALLOC)) {
-            sizeOfModule += psec->get_size() + 1;
+            sizeOfModule += psec->get_size() + psec->get_addr_align();
         }
     }
     return sizeOfModule;
@@ -58,26 +58,41 @@ ModuleDataFactory::load(const ELFIO::elfio &reader, const HeapWrapper &heapWrapp
         return {};
     }
 
-    uint32_t sizeOfModule = GetSizeOfModule(reader);
+    uint32_t text_size = 0;
+    uint32_t data_size = 0;
 
-    auto moduleDataOpt = heapWrapper.Alloc(sizeOfModule, 0x100);
-    if (!moduleData) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to allocate memory for module");
-        return {};
+    for (uint32_t i = 0; i < sec_num; ++i) {
+        ELFIO::section *psec = reader.sections[i];
+        if (psec->get_type() == 0x80000002) {
+            continue;
+        }
+
+        if ((psec->get_type() == ELFIO::SHT_PROGBITS || psec->get_type() == ELFIO::SHT_NOBITS) && (psec->get_flags() & ELFIO::SHF_ALLOC)) {
+            uint32_t sectionSize = psec->get_size();
+            auto address         = (uint32_t) psec->get_address();
+            if ((address >= 0x02000000) && address < 0x10000000) {
+                text_size += sectionSize + psec->get_addr_align();
+            } else if ((address >= 0x10000000) && address < 0xC0000000) {
+                data_size += sectionSize + psec->get_addr_align();
+            }
+        }
     }
-    ExpHeapMemory moduleMemory = std::move(*moduleDataOpt);
 
-    uint32_t dataPtr      = (uint32_t) ((void *) moduleMemory);
-    uint32_t baseOffset   = dataPtr;
-    uint32_t startAddress = baseOffset;
+    auto text_dataOpt = heapWrapper.Alloc(text_size, 0x100);
+    if (!text_dataOpt) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to alloc memory for the .text section (%d bytes)", text_size);
+        return std::nullopt;
+    }
+    ExpHeapMemory text_data = std::move(*text_dataOpt);
 
-    uint32_t offset_text = baseOffset;
-    uint32_t offset_data = offset_text;
+    auto data_dataOpt = heapWrapper.Alloc(data_size, 0x100);
+    if (!data_dataOpt) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to alloc memory for the .data section (%d bytes)", data_size);
+        return std::nullopt;
+    }
+    ExpHeapMemory data_data = std::move(*data_dataOpt);
 
-    uint32_t entrypoint = offset_text + (uint32_t) reader.get_entry() - 0x02000000;
-
-    uint32_t totalSize  = 0;
-    uint32_t endAddress = 0;
+    uint32_t entrypoint = (uint32_t) text_data.data() + (uint32_t) reader.get_entry() - 0x02000000;
 
     for (uint32_t i = 0; i < sec_num; ++i) {
         ELFIO::section *psec = reader.sections[i];
@@ -87,26 +102,34 @@ ModuleDataFactory::load(const ELFIO::elfio &reader, const HeapWrapper &heapWrapp
 
         if ((psec->get_type() == ELFIO::SHT_PROGBITS || psec->get_type() == ELFIO::SHT_NOBITS) && (psec->get_flags() & ELFIO::SHF_ALLOC)) {
             uint32_t sectionSize = psec->get_size();
+            auto address         = (uint32_t) psec->get_address();
 
-            totalSize += sectionSize;
-            if (totalSize > sizeOfModule) {
-                DEBUG_FUNCTION_LINE_ERR("Couldn't load setup module because it's too big.");
-                return {};
-            }
+            uint32_t destination = address;
 
-            auto address = (uint32_t) psec->get_address();
-
-            destinations[psec->get_index()] = (uint8_t *) baseOffset;
-
-            uint32_t destination = baseOffset + address;
             if ((address >= 0x02000000) && address < 0x10000000) {
+                destination += (uint32_t) text_data.data();
                 destination -= 0x02000000;
-                destinations[psec->get_index()] -= 0x02000000;
-                baseOffset += sectionSize;
-                offset_data += sectionSize;
+                destinations[psec->get_index()] = (uint8_t *) text_data.data();
+
+                if (destination + sectionSize > (uint32_t) text_data.data() + text_size) {
+                    DEBUG_FUNCTION_LINE_ERR("Tried to overflow .text buffer. %08X > %08X", destination + sectionSize, (uint32_t) text_data.data() + text_data.size());
+                    OSFatal("EnvironmentLoader: Tried to overflow .text buffer");
+                } else if (destination < (uint32_t) text_data.data()) {
+                    DEBUG_FUNCTION_LINE_ERR("Tried to underflow .text buffer. %08X < %08X", destination, (uint32_t) text_data.data());
+                    OSFatal("EnvironmentLoader: Tried to underflow .text buffer");
+                }
             } else if ((address >= 0x10000000) && address < 0xC0000000) {
+                destination += (uint32_t) data_data.data();
                 destination -= 0x10000000;
-                destinations[psec->get_index()] -= 0x10000000;
+                destinations[psec->get_index()] = (uint8_t *) data_data.data();
+
+                if (destination + sectionSize > (uint32_t) data_data.data() + data_data.size()) {
+                    DEBUG_FUNCTION_LINE_ERR("Tried to overflow .data buffer. %08X > %08X", destination + sectionSize, (uint32_t) data_data.data() + data_data.size());
+                    OSFatal("EnvironmentLoader: Tried to overflow .data buffer");
+                } else if (destination < (uint32_t) data_data.data()) {
+                    DEBUG_FUNCTION_LINE_ERR("Tried to underflow .data buffer. %08X < %08X", destination, (uint32_t) data_data.data());
+                    OSFatal("EnvironmentLoader: Tried to underflow .data buffer");
+                }
             } else if (address >= 0xC0000000) {
                 DEBUG_FUNCTION_LINE_ERR("Loading section from 0xC0000000 is NOT supported");
                 return std::nullopt;
@@ -115,34 +138,22 @@ ModuleDataFactory::load(const ELFIO::elfio &reader, const HeapWrapper &heapWrapp
                 return std::nullopt;
             }
 
-            const char *p = reader.sections[i]->get_data();
+            const char *p = psec->get_data();
 
-            if (destination < dataPtr) {
-                DEBUG_FUNCTION_LINE_ERR("Tried to underflow buffer. %08X < %08X", destination, dataPtr);
-                OSFatal("EnvironmentLoader: Tried to underflow buffer");
-            }
-            if (destination + sectionSize > (uint32_t) dataPtr + sizeOfModule) {
-                DEBUG_FUNCTION_LINE_ERR("Tried to overflow buffer. %08X > %08X", destination + sectionSize, dataPtr + sizeOfModule);
-                OSFatal("EnvironmentLoader: Tried to overflow buffer");
+            uint32_t address_align = psec->get_addr_align();
+            if ((destination & (address_align - 1)) != 0) {
+                DEBUG_FUNCTION_LINE_WARN("Address not aligned: %08X %08X", destination, address_align);
+                OSFatal("EnvironmentLoader: Address not aligned");
             }
 
             if (psec->get_type() == ELFIO::SHT_NOBITS) {
-                DEBUG_FUNCTION_LINE("memset section %s %08X to 0 (%d bytes)", psec->get_name().c_str(), destination, sectionSize);
+                DEBUG_FUNCTION_LINE_VERBOSE("memset section %s %08X to 0 (%d bytes)", psec->get_name().c_str(), destination, sectionSize);
                 memset((void *) destination, 0, sectionSize);
             } else if (psec->get_type() == ELFIO::SHT_PROGBITS) {
-                DEBUG_FUNCTION_LINE("Copy section %s %08X -> %08X (%d bytes)", psec->get_name().c_str(), p, destination, sectionSize);
+                DEBUG_FUNCTION_LINE_VERBOSE("Copy section %s %08X -> %08X (%d bytes)", psec->get_name().c_str(), p, destination, sectionSize);
                 memcpy((void *) destination, p, sectionSize);
             }
-
-            //nextAddress = ROUNDUP(destination + sectionSize, 0x100);
-            if (psec->get_name() == ".bss" || psec->get_name() == ".sbss") {
-                DEBUG_FUNCTION_LINE("memset %s section. Location: %08X size: %08X", psec->get_name().c_str(), destination, sectionSize);
-                memset(reinterpret_cast<void *>(destination), 0, sectionSize);
-            }
-
-            if (endAddress < destination + sectionSize) {
-                endAddress = destination + sectionSize;
-            }
+            DEBUG_FUNCTION_LINE_VERBOSE("Saved %s section info. Location: %08X size: %08X", psec->get_name().c_str(), destination, sectionSize);
 
             DCFlushRange((void *) destination, sectionSize);
             ICInvalidateRange((void *) destination, sectionSize);
@@ -153,7 +164,7 @@ ModuleDataFactory::load(const ELFIO::elfio &reader, const HeapWrapper &heapWrapp
         ELFIO::section *psec = reader.sections[i];
         if ((psec->get_type() == ELFIO::SHT_PROGBITS || psec->get_type() == ELFIO::SHT_NOBITS) && (psec->get_flags() & ELFIO::SHF_ALLOC)) {
             DEBUG_FUNCTION_LINE("Linking (%d)... %s", i, psec->get_name().c_str());
-            if (!linkSection(reader, psec->get_index(), (uint32_t) destinations[psec->get_index()], offset_text, offset_data, trampoline_data, trampoline_data_length)) {
+            if (!linkSection(reader, psec->get_index(), (uint32_t) destinations[psec->get_index()], (uint32_t) (text_data.data()), (uint32_t) (data_data.data()), trampoline_data, trampoline_data_length)) {
                 DEBUG_FUNCTION_LINE_ERR("elfLink failed");
                 return std::nullopt;
             }
@@ -161,13 +172,12 @@ ModuleDataFactory::load(const ELFIO::elfio &reader, const HeapWrapper &heapWrapp
     }
     getImportRelocationData(moduleData, reader, destinations.get());
 
-    DCFlushRange((void *) dataPtr, totalSize);
-    ICInvalidateRange((void *) dataPtr, totalSize);
+    DCFlushRange((void *) data_data.data(), data_data.size());
+    ICInvalidateRange((void *) text_data.data(), text_data.size());
 
-    moduleData->setStartAddress(startAddress);
-    moduleData->setEndAddress(endAddress);
     moduleData->setEntrypoint(entrypoint);
-    moduleData->setMemory(std::move(moduleMemory));
+    moduleData->setTextMemory(std::move(text_data));
+    moduleData->setDataMemory(std::move(data_data));
 
     DEBUG_FUNCTION_LINE("Saved entrypoint as %08X", entrypoint);
 
@@ -194,6 +204,7 @@ bool ModuleDataFactory::getImportRelocationData(std::unique_ptr<ModuleData> &mod
     for (uint32_t i = 0; i < sec_num; ++i) {
         ELFIO::section *psec = reader.sections[i];
         if (psec->get_type() == ELFIO::SHT_RELA || psec->get_type() == ELFIO::SHT_REL) {
+            DEBUG_FUNCTION_LINE_VERBOSE("Found relocation section %s", psec->get_name().c_str());
             ELFIO::relocation_section_accessor rel(reader, psec);
             for (uint32_t j = 0; j < (uint32_t) rel.get_entries_num(); ++j) {
                 ELFIO::Elf_Word symbol = 0;
@@ -231,21 +242,15 @@ bool ModuleDataFactory::getImportRelocationData(std::unique_ptr<ModuleData> &mod
                 if (!infoMap.contains(sym_section_index)) {
                     DEBUG_FUNCTION_LINE_ERR("Relocation is referencing a unknown section. %d destination: %08X sym_name %s", section_index, destinations[section_index], sym_name.c_str());
                     OSFatal("EnvironmentLoader: Relocation is referencing a unknown section.");
-                }
-
-                auto relocationData = make_unique_nothrow<RelocationData>(type,
-                                                                          offset - 0x02000000,
-                                                                          addend,
-                                                                          (void *) (destinations[section_index] + 0x02000000),
-                                                                          sym_name,
-                                                                          infoMap[sym_section_index]);
-
-                if (!relocationData) {
-                    DEBUG_FUNCTION_LINE_ERR("Failed to alloc relocation data");
                     return false;
                 }
 
-                moduleData->addRelocationData(std::move(relocationData));
+                moduleData->addRelocationData(RelocationData(type,
+                                                             offset - 0x02000000,
+                                                             addend,
+                                                             (void *) (destinations[section_index]),
+                                                             sym_name,
+                                                             infoMap[sym_section_index]));
             }
         }
     }
@@ -305,17 +310,27 @@ bool ModuleDataFactory::linkSection(const ELFIO::elfio &reader, uint32_t section
                     return false;
                 }
 
+                auto adjusted_offset = (uint32_t) offset;
+                if ((offset >= 0x02000000) && offset < 0x10000000) {
+                    adjusted_offset -= 0x02000000;
+                } else if ((adjusted_offset >= 0x10000000) && adjusted_offset < 0xC0000000) {
+                    adjusted_offset -= 0x10000000;
+                } else if (adjusted_offset >= 0xC0000000) {
+                    adjusted_offset -= 0xC0000000;
+                }
+
                 if (sym_section_index == ELFIO::SHN_ABS) {
                     //
                 } else if (sym_section_index > ELFIO::SHN_LORESERVE) {
                     DEBUG_FUNCTION_LINE_ERR("NOT IMPLEMENTED: %04X", sym_section_index);
                     return false;
                 }
-                if (!ElfUtils::elfLinkOne(type, offset, addend, destination, adjusted_sym_value, trampoline_data, trampoline_data_length, RELOC_TYPE_FIXED)) {
+                if (!ElfUtils::elfLinkOne(type, adjusted_offset, addend, destination, adjusted_sym_value, trampoline_data, trampoline_data_length, RELOC_TYPE_FIXED)) {
                     DEBUG_FUNCTION_LINE_ERR("Link failed");
                     return false;
                 }
             }
+            return true;
         }
     }
     return true;
