@@ -51,6 +51,5 @@ public:
     static bool elfLinkOne(char type, size_t offset, int32_t addend, uint32_t destination, uint32_t symbol_addr, relocation_trampoline_entry_t *trampolin_data, uint32_t trampolin_data_length,
                            RelocationType reloc_type);
 
-
-    static bool doRelocation(const std::vector<std::unique_ptr<RelocationData>> &relocData, relocation_trampoline_entry_t *tramp_data, uint32_t tramp_length, std::map<std::string, OSDynLoad_Module> &usedRPls);
+    static bool doRelocation(const std::vector<RelocationData> &relocData, relocation_trampoline_entry_t *tramp_data, uint32_t tramp_length, std::map<std::string, OSDynLoad_Module> &usedRPls);
 };

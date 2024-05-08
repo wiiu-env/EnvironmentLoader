@@ -38,7 +38,7 @@
 #include "utils/wiiu_zlib.hpp"
 #include "version.h"
 
-#define ENVIRONMENT_LOADER_VERSION "v0.3.0"
+#define ENVIRONMENT_LOADER_VERSION "v0.3.1"
 
 #define MEMORY_REGION_START        0x00800000
 #define AUTOBOOT_CONFIG_PATH       "fs:/vol/external01/wiiu/environments/default.cfg"
@@ -384,9 +384,6 @@ void LoadAndRunModule(std::string_view filepath, std::string_view environment_pa
         } else {
             DEBUG_FUNCTION_LINE("Relocation done");
         }
-
-        DCFlushRange((void *) moduleData.value()->getStartAddress(), moduleData.value()->getEndAddress() - moduleData.value()->getStartAddress());
-        ICInvalidateRange((void *) moduleData.value()->getStartAddress(), moduleData.value()->getEndAddress() - moduleData.value()->getStartAddress());
 
         char *arr[4];
         arr[0] = (char *) environment_path.data();
