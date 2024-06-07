@@ -7,10 +7,12 @@
 #include <coreinit/filesystem_fsa.h>
 #include <coreinit/foreground.h>
 #include <coreinit/ios.h>
+#include <coreinit/savedframe.h>
 #include <coreinit/screen.h>
 #include <coreinit/title.h>
 #include <elfio/elfio.hpp>
 #include <fcntl.h>
+#include <gx2/display.h>
 #include <gx2/state.h>
 #include <malloc.h>
 #include <memory>
@@ -421,7 +423,25 @@ void LoadAndRunModule(std::string_view filepath, std::string_view environment_pa
     SetupKernelModule();
 }
 
+void ClearSavedFrameBuffers() {
+    // If GX2 is running make sure to shut it down and free all existing memory in the saved-frame area.
+    if (GX2GetMainCoreId() != -1) {
+        GX2SetTVEnable(FALSE);
+        GX2SetDRCEnable(FALSE);
+        GX2Shutdown();
+    }
+
+    __OSClearSavedFrame(OS_SAVED_FRAME_A, OS_SAVED_FRAME_SCREEN_TV);
+    __OSClearSavedFrame(OS_SAVED_FRAME_A, OS_SAVED_FRAME_SCREEN_DRC);
+    __OSClearSavedFrame(OS_SAVED_FRAME_B, OS_SAVED_FRAME_SCREEN_TV);
+    __OSClearSavedFrame(OS_SAVED_FRAME_B, OS_SAVED_FRAME_SCREEN_DRC);
+}
+
 std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> &payloads, int32_t autobootIndex) {
+
+    // Clear saved frame buffer to reduce screen corruption
+    ClearSavedFrameBuffers();
+
     OSScreenInit();
 
     uint32_t tvBufferSize  = OSScreenGetBufferSizeEx(SCREEN_TV);
@@ -534,6 +554,9 @@ std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> 
 
     // Call GX2Init to shut down OSScreen
     GX2Init(nullptr);
+
+    GX2SetTVEnable(FALSE);
+    GX2SetDRCEnable(FALSE);
 
     free(screenBuffer);
 
