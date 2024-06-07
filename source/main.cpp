@@ -17,6 +17,7 @@
 #include <malloc.h>
 #include <memory>
 #include <nn/act/client_cpp.h>
+#include <nsysccr/cdc.h>
 #include <proc_ui/procui.h>
 #include <sysapp/launch.h>
 #include <sysapp/title.h>
@@ -437,7 +438,18 @@ void ClearSavedFrameBuffers() {
     __OSClearSavedFrame(OS_SAVED_FRAME_B, OS_SAVED_FRAME_SCREEN_DRC);
 }
 
+void AbortQuickStartMenu() {
+    CCRCDCDrcState state = {};
+    CCRCDCSysGetDrcState(CCR_CDC_DESTINATION_DRC0, &state);
+    if (state.state == CCR_CDC_DRC_STATE_IN_QUICK_START_MENU) {
+        state.state = CCR_CDC_DRC_STATE_ACTIVE;
+        CCRCDCSysSetDrcState(CCR_CDC_DESTINATION_DRC0, &state);
+    }
+}
+
 std::string EnvironmentSelectionScreen(const std::map<std::string, std::string> &payloads, int32_t autobootIndex) {
+    // Close quick start menu is selection screen is displayed
+    AbortQuickStartMenu();
 
     // Clear saved frame buffer to reduce screen corruption
     ClearSavedFrameBuffers();
