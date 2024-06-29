@@ -99,6 +99,7 @@ InputUtils::InputData InputUtils::getControllerInput() {
     InputData inputData{};
     VPADStatus vpadStatus{};
     VPADReadError vpadError = VPAD_READ_UNINITIALIZED;
+    int tests = 0;
     do {
         if (VPADRead(VPAD_CHAN_0, &vpadStatus, 1, &vpadError) > 0 && vpadError == VPAD_READ_SUCCESS) {
             inputData.trigger = vpadStatus.trigger;
@@ -107,7 +108,8 @@ InputUtils::InputData InputUtils::getControllerInput() {
         } else {
             OSSleepTicks(OSMillisecondsToTicks(1));
         }
-    } while (vpadError == VPAD_READ_NO_SAMPLES);
+        tests++;
+    } while (vpadError == VPAD_READ_NO_SAMPLES && tests <= 5);
 
     KPADStatus kpadStatus{};
     KPADError kpadError = KPAD_ERROR_UNINITIALIZED;
