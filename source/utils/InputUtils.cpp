@@ -1,5 +1,4 @@
 #include "InputUtils.h"
-#include "logger.h"
 #include <coreinit/thread.h>
 #include <padscore/kpad.h>
 #include <padscore/wpad.h>
@@ -96,9 +95,10 @@ uint32_t remapClassicButtons(uint32_t buttons) {
 }
 
 InputUtils::InputData InputUtils::getControllerInput() {
-    InputData inputData{};
-    VPADStatus vpadStatus{};
+    InputData inputData     = {};
+    VPADStatus vpadStatus   = {};
     VPADReadError vpadError = VPAD_READ_UNINITIALIZED;
+    int maxAttempts         = 100;
     do {
         if (VPADRead(VPAD_CHAN_0, &vpadStatus, 1, &vpadError) > 0 && vpadError == VPAD_READ_SUCCESS) {
             inputData.trigger = vpadStatus.trigger;
@@ -107,10 +107,10 @@ InputUtils::InputData InputUtils::getControllerInput() {
         } else {
             OSSleepTicks(OSMillisecondsToTicks(1));
         }
-    } while (vpadError == VPAD_READ_NO_SAMPLES);
+    } while (--maxAttempts > 0 && vpadError == VPAD_READ_NO_SAMPLES);
 
-    KPADStatus kpadStatus{};
-    KPADError kpadError = KPAD_ERROR_UNINITIALIZED;
+    KPADStatus kpadStatus = {};
+    KPADError kpadError   = KPAD_ERROR_UNINITIALIZED;
     for (int32_t i = 0; i < 4; i++) {
         if (KPADReadEx((KPADChan) i, &kpadStatus, 1, &kpadError) > 0) {
             if (kpadError == KPAD_ERROR_OK && kpadStatus.extensionType != 0xFF) {
