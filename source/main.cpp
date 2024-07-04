@@ -41,7 +41,7 @@
 #include "utils/wiiu_zlib.hpp"
 #include "version.h"
 
-#define ENVIRONMENT_LOADER_VERSION "v0.3.1"
+#define ENVIRONMENT_LOADER_VERSION "v0.3.2"
 
 #define MEMORY_REGION_START        0x00800000
 #define AUTOBOOT_CONFIG_PATH       "fs:/vol/external01/wiiu/environments/default.cfg"
