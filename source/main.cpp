@@ -441,7 +441,7 @@ void ClearSavedFrameBuffers() {
 void AbortQuickStartMenu() {
     CCRCDCDrcState state = {};
     CCRCDCSysGetDrcState(CCR_CDC_DESTINATION_DRC0, &state);
-    if (state.state == CCR_CDC_DRC_STATE_IN_QUICK_START_MENU) {
+    if (state.state == CCR_CDC_DRC_STATE_SUBACTIVE) {
         state.state = CCR_CDC_DRC_STATE_ACTIVE;
         CCRCDCSysSetDrcState(CCR_CDC_DESTINATION_DRC0, &state);
     }
