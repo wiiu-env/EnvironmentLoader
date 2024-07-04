@@ -140,8 +140,6 @@ PairMenu::~PairMenu() {
     CCRSysExit();
 }
 
-extern "C" bool WPADStartSyncDevice();
-
 bool PairMenu::ProcessPairScreen() {
     switch (mState) {
         case STATE_SYNC_WPAD: {
