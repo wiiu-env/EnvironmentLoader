@@ -98,6 +98,7 @@ bool writeFileContent(const std::string &path, const std::string &content) {
 extern "C" void __fini();
 extern "C" void __init_wut_malloc();
 void LoadAndRunModule(std::string_view filepath, std::string_view environment_path);
+void ClearSavedFrameBuffers();
 
 int main(int argc, char **argv) {
     // We need to call __init_wut_malloc somewhere so wut_malloc will be used for the memory allocation.
@@ -128,6 +129,7 @@ int main(int argc, char **argv) {
     }
 
     bool noEnvironmentsFound = false;
+    bool shownMenu           = false;
 
     std::string environmentPath = std::string(environmentPathFromIOSU);
     if (!environmentPath.starts_with("fs:/vol/external01/wiiu/environments/")) { // If the environment path in IOSU is empty or unexpected, read config
@@ -163,6 +165,7 @@ int main(int argc, char **argv) {
         InputUtils::InputData input = InputUtils::getControllerInput();
 
         if (forceMenu || ((input.trigger | input.hold) & VPAD_BUTTON_X) == VPAD_BUTTON_X) {
+            shownMenu = true;
             DEBUG_FUNCTION_LINE_VERBOSE("Open menu!");
             environmentPath = EnvironmentSelectionScreen(environmentPaths, autobootIndex);
             if (environmentPaths.empty()) {
@@ -170,9 +173,24 @@ int main(int argc, char **argv) {
             } else {
                 DEBUG_FUNCTION_LINE_VERBOSE("Selected %s", environmentPath.c_str());
             }
+        } else {
         }
         InputUtils::DeInit();
     }
+
+    if (!shownMenu) {
+        // Clear saved frame buffer to reduce screen corruption
+        ClearSavedFrameBuffers();
+
+        OSScreenInit();
+
+        // Call GX2Init to shut down OSScreen
+        GX2Init(nullptr);
+
+        GX2SetTVEnable(FALSE);
+        GX2SetDRCEnable(FALSE);
+    }
+
     RevertMainHook();
 
     if (!noEnvironmentsFound) {
