@@ -162,9 +162,8 @@ int main(int argc, char **argv) {
 
         InputUtils::Init();
 
-        InputUtils::InputData input = InputUtils::getControllerInput();
-
-        if (forceMenu || ((input.trigger | input.hold) & VPAD_BUTTON_X) == VPAD_BUTTON_X) {
+        // KPAD controllers may need time to provide samples after initialization.
+        if (forceMenu || InputUtils::isButtonPressedWithin(VPAD_BUTTON_X, 1000)) {
             shownMenu = true;
             DEBUG_FUNCTION_LINE_VERBOSE("Open menu!");
             environmentPath = EnvironmentSelectionScreen(environmentPaths, autobootIndex);
@@ -195,7 +194,6 @@ int main(int argc, char **argv) {
 
     if (!noEnvironmentsFound) {
         DirList setupModules(environmentPath + "/modules/setup", ".rpx", DirList::Files, 1);
-        setupModules.SortList();
 
         for (int i = 0; i < setupModules.GetFilecount(); i++) {
             //! skip hidden linux and mac files

@@ -14,7 +14,8 @@ bool ElfUtils::doRelocation(const std::vector<RelocationData> &relocData, reloca
         int32_t isData             = curReloc.getImportRPLInformation()->isData();
         OSDynLoad_Module rplHandle = nullptr;
 
-        if (!usedRPls.contains(rplName)) {
+        const auto existingRpl = usedRPls.find(rplName);
+        if (existingRpl == usedRPls.end()) {
             //DEBUG_FUNCTION_LINE_VERBOSE("Acquire %s", rplName.c_str());
             // Always acquire to increase refcount and make sure it won't get unloaded while we're using it.
             OSDynLoad_Error err = OSDynLoad_Acquire(rplName.c_str(), &rplHandle);
@@ -24,11 +25,10 @@ bool ElfUtils::doRelocation(const std::vector<RelocationData> &relocData, reloca
             }
             // Keep track RPLs we are using.
             // They will be released on exit (See: AromaBaseModule)
-            usedRPls[rplName] = rplHandle;
+            usedRPls.emplace(rplName, rplHandle);
         } else {
-            //DEBUG_FUNCTION_LINE_VERBOSE("Use from usedRPLs cache! %s", rplName.c_str());
+            rplHandle = existingRpl->second;
         }
-        rplHandle = usedRPls[rplName];
 
         uint32_t functionAddress = 0;
         if ((OSDynLoad_FindExport(rplHandle, (OSDynLoad_ExportType) isData, functionName.c_str(), (void **) &functionAddress) != OS_DYNLOAD_OK) || functionAddress == 0) {

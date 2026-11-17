@@ -19,6 +19,8 @@ sd:\wiiu\environments\installer\modules\setup\01_installer_launcher.rpx
 When you start the EnvironmentLoader a selection menu appears. Use Y on the Gamepad to set a default enviroment.
 To open the selection menu when a default enviroment is set, hold X on the Gamepad while launching the EnvironmentLoader.
 
+You can also hold X on a paired Wii U Pro Controller or Classic Controller, or hold 1 on a Wii Remote. Keep the button held while launching: the loader checks for it for up to one second before starting the default environment. This check applies when selecting the environment from the SD card configuration; an environment path supplied by IOSU bypasses it.
+
 When launching an given enviroment, all `.rpx` files in `[ENVIRONMENT]/modules/setup` will be run.
 - Make sure not to call `exit` in the setup payloads
 - The files will be run in the order of their ordered filenames.

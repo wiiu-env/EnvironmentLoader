@@ -13,5 +13,7 @@ public:
     static void Init();
     static void DeInit();
 
-    static InputData getControllerInput();
+    static InputData getControllerInput(bool waitForVpad = true);
+
+    static bool isButtonPressedWithin(uint32_t buttons, uint32_t timeoutMs);
 };
