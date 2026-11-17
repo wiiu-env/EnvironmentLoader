@@ -1,5 +1,6 @@
 #include "InputUtils.h"
 #include <coreinit/thread.h>
+#include <coreinit/time.h>
 #include <padscore/kpad.h>
 #include <padscore/wpad.h>
 #include <vpad/input.h>
@@ -94,17 +95,17 @@ uint32_t remapClassicButtons(uint32_t buttons) {
     return convButtons;
 }
 
-InputUtils::InputData InputUtils::getControllerInput() {
+InputUtils::InputData InputUtils::getControllerInput(bool waitForVpad) {
     InputData inputData     = {};
     VPADStatus vpadStatus   = {};
     VPADReadError vpadError = VPAD_READ_UNINITIALIZED;
-    int maxAttempts         = 100;
+    int maxAttempts         = waitForVpad ? 100 : 1;
     do {
         if (VPADRead(VPAD_CHAN_0, &vpadStatus, 1, &vpadError) > 0 && vpadError == VPAD_READ_SUCCESS) {
             inputData.trigger = vpadStatus.trigger;
             inputData.hold    = vpadStatus.hold;
             inputData.release = vpadStatus.release;
-        } else {
+        } else if (waitForVpad) {
             OSSleepTicks(OSMillisecondsToTicks(1));
         }
     } while (--maxAttempts > 0 && vpadError == VPAD_READ_NO_SAMPLES);
@@ -118,6 +119,11 @@ InputUtils::InputData InputUtils::getControllerInput() {
                     inputData.trigger |= remapWiiMoteButtons(kpadStatus.trigger);
                     inputData.hold |= remapWiiMoteButtons(kpadStatus.hold);
                     inputData.release |= remapWiiMoteButtons(kpadStatus.release);
+                } else if (kpadStatus.extensionType == WPAD_EXT_PRO_CONTROLLER) {
+                    // The menu buttons share their bit values with the Classic Controller.
+                    inputData.trigger |= remapClassicButtons(kpadStatus.pro.trigger);
+                    inputData.hold |= remapClassicButtons(kpadStatus.pro.hold);
+                    inputData.release |= remapClassicButtons(kpadStatus.pro.release);
                 } else {
                     inputData.trigger |= remapClassicButtons(kpadStatus.classic.trigger);
                     inputData.hold |= remapClassicButtons(kpadStatus.classic.hold);
@@ -128,6 +134,22 @@ InputUtils::InputData InputUtils::getControllerInput() {
     }
 
     return inputData;
+}
+
+bool InputUtils::isButtonPressedWithin(uint32_t buttons, uint32_t timeoutMs) {
+    const auto start   = OSGetTime();
+    const auto timeout = OSMillisecondsToTicks(timeoutMs);
+    while (true) {
+        // Poll every controller without waiting for GamePad samples first.
+        const auto input = getControllerInput(false);
+        if ((input.trigger | input.hold) & buttons) {
+            return true;
+        }
+        if (OSGetTime() - start >= timeout) {
+            return false;
+        }
+        OSSleepTicks(OSMillisecondsToTicks(10));
+    }
 }
 
 void InputUtils::Init() {

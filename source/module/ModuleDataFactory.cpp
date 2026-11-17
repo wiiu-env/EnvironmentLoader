@@ -206,6 +206,7 @@ bool ModuleDataFactory::getImportRelocationData(std::unique_ptr<ModuleData> &mod
         if (psec->get_type() == ELFIO::SHT_RELA || psec->get_type() == ELFIO::SHT_REL) {
             DEBUG_FUNCTION_LINE_VERBOSE("Found relocation section %s", psec->get_name().c_str());
             ELFIO::relocation_section_accessor rel(reader, psec);
+            ELFIO::symbol_section_accessor symbols(reader, reader.sections[(ELFIO::Elf_Half) psec->get_link()]);
             for (uint32_t j = 0; j < (uint32_t) rel.get_entries_num(); ++j) {
                 ELFIO::Elf_Word symbol = 0;
                 ELFIO::Elf64_Addr offset;
@@ -218,7 +219,6 @@ bool ModuleDataFactory::getImportRelocationData(std::unique_ptr<ModuleData> &mod
                     DEBUG_FUNCTION_LINE_ERR("Failed to get relocation");
                     return false;
                 }
-                ELFIO::symbol_section_accessor symbols(reader, reader.sections[(ELFIO::Elf_Half) psec->get_link()]);
 
                 // Find the symbol
                 ELFIO::Elf_Xword size;
@@ -239,7 +239,8 @@ bool ModuleDataFactory::getImportRelocationData(std::unique_ptr<ModuleData> &mod
                 }
 
                 uint32_t section_index = psec->get_info();
-                if (!infoMap.contains(sym_section_index)) {
+                const auto importInfo = infoMap.find(sym_section_index);
+                if (importInfo == infoMap.end()) {
                     DEBUG_FUNCTION_LINE_ERR("Relocation is referencing a unknown section. %d destination: %08X sym_name %s", section_index, destinations[section_index], sym_name.c_str());
                     OSFatal("EnvironmentLoader: Relocation is referencing a unknown section.");
                     return false;
@@ -250,7 +251,7 @@ bool ModuleDataFactory::getImportRelocationData(std::unique_ptr<ModuleData> &mod
                                                              addend,
                                                              (void *) (destinations[section_index]),
                                                              sym_name,
-                                                             infoMap[sym_section_index]));
+                                                             importInfo->second));
             }
         }
     }
@@ -266,6 +267,7 @@ bool ModuleDataFactory::linkSection(const ELFIO::elfio &reader, uint32_t section
         if (psec->get_info() == section_index) {
             DEBUG_FUNCTION_LINE_VERBOSE("Found relocation section %s", psec->get_name().c_str());
             ELFIO::relocation_section_accessor rel(reader, psec);
+            ELFIO::symbol_section_accessor symbols(reader, reader.sections[(ELFIO::Elf_Half) psec->get_link()]);
             for (uint32_t j = 0; j < (uint32_t) rel.get_entries_num(); ++j) {
                 ELFIO::Elf_Word symbol = 0;
                 ELFIO::Elf64_Addr offset;
@@ -278,7 +280,6 @@ bool ModuleDataFactory::linkSection(const ELFIO::elfio &reader, uint32_t section
                     DEBUG_FUNCTION_LINE_ERR("Failed to get relocation");
                     return false;
                 }
-                ELFIO::symbol_section_accessor symbols(reader, reader.sections[(ELFIO::Elf_Half) psec->get_link()]);
 
                 // Find the symbol
                 ELFIO::Elf_Xword size;
